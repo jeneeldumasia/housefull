@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Houseful</title>
+  <title>Housefull</title>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
   <header>
-    <a class="brand" href="#" id="home">HOUSEFUL</a>
+    <a class="brand" href="#" id="home">HOUSEFULL</a>
     <nav>
       <button class="link" id="nav-bookings" hidden>My bookings</button>
       <span id="nav-email"></span>
@@ -24,18 +24,23 @@
         <h2>Add an event</h2>
         <div class="fields">
           <label>Name <input name="name" required maxlength="200"></label>
+          <label>Venue <input name="venue" required maxlength="200"></label>
           <label>Date and time <input name="starts_at" type="datetime-local" required></label>
           <label>Seats <input name="seats" type="number" min="1" max="10000" value="40" required></label>
+          <label>Price per seat (₹) <input name="price_inr" type="number" min="0" max="1000000" value="500" required></label>
         </div>
+        <label class="wide">Description <textarea name="description" rows="2" maxlength="2000"></textarea></label>
         <button type="submit">Create event</button>
       </form>
+      <input id="search" class="search" type="search" placeholder="Search by event or venue" aria-label="Search events">
       <div id="event-list" class="cards"></div>
     </section>
 
     <section id="view-seats" hidden>
       <h1 id="seat-title"></h1>
       <p id="seat-when" class="muted"></p>
-      <div id="houseful-board" class="board" hidden>HOUSEFUL</div>
+      <p id="seat-description"></p>
+      <div id="housefull-board" class="board" hidden>HOUSEFULL</div>
       <div class="screen">SCREEN</div>
       <div id="seat-grid" class="grid"></div>
       <div class="legend">
@@ -43,7 +48,8 @@
         <span><i class="seat-key selected"></i> Selected</span>
         <span><i class="seat-key taken"></i> Taken</span>
       </div>
-      <button id="book-button" disabled>Select a seat</button>
+      <p id="seat-summary" class="muted-line"></p>
+      <button id="book-button" disabled>Select seats</button>
     </section>
 
     <section id="view-bookings" hidden>

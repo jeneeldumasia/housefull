@@ -3,7 +3,7 @@ import sys
 
 import psycopg
 
-from houseful.config import DATABASE_URL
+from housefull.config import DATABASE_URL
 
 
 def main() -> None:

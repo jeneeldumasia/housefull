@@ -3,7 +3,7 @@ from pathlib import Path
 
 import psycopg
 
-from houseful.config import DATABASE_URL
+from housefull.config import DATABASE_URL
 
 MIGRATIONS = Path(__file__).resolve().parent.parent / "migrations"
 LOCK_ID = 727274

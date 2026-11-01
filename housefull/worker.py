@@ -5,10 +5,10 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Response
 
-from houseful.db import pool
+from housefull.db import pool
 
 logging.basicConfig(level=logging.INFO)
-log = logging.getLogger("houseful.worker")
+log = logging.getLogger("housefull.worker")
 
 
 @asynccontextmanager
@@ -18,7 +18,7 @@ async def lifespan(_: FastAPI):
     pool.close()
 
 
-app = FastAPI(title="Houseful worker", lifespan=lifespan)
+app = FastAPI(title="Housefull worker", lifespan=lifespan)
 
 
 @app.get("/healthz")
@@ -37,7 +37,7 @@ def handle_push(envelope: dict):
 
     with pool.connection() as conn:
         booking = conn.execute(
-            "SELECT status, seat_id, email FROM bookings WHERE id = %s FOR UPDATE",
+            "SELECT status, email FROM bookings WHERE id = %s FOR UPDATE",
             (booking_id,),
         ).fetchone()
         if booking is None:
@@ -49,8 +49,13 @@ def handle_push(envelope: dict):
                 (booking_id,),
             )
             conn.execute(
-                "UPDATE seats SET status = 'booked' WHERE id = %s",
-                (booking["seat_id"],),
+                """
+                UPDATE seats SET status = 'booked'
+                WHERE id IN (
+                    SELECT seat_id FROM booking_seats WHERE booking_id = %s AND active
+                )
+                """,
+                (booking_id,),
             )
             log.info("confirmation sent booking_id=%s", booking_id)
     return Response(status_code=204)

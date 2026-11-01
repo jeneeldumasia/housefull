@@ -7,15 +7,16 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from houseful.api import app as api_app
-from houseful.auth import COOKIE_NAME
-from houseful.db import pool
-from houseful.limits import EMAIL_LIMIT, IP_LIMIT
-from houseful.messaging import get_publisher
-from houseful.worker import app as worker_app
+from housefull.api import app as api_app
+from housefull.auth import COOKIE_NAME
+from housefull.db import pool
+from housefull.limits import EMAIL_LIMIT, IP_LIMIT
+from housefull.messaging import get_publisher
+from housefull.worker import app as worker_app
 from scripts.expire_holds import expire_holds
 
 PASSWORD = "correct-horse"
+EVENT = {"name": "Show", "venue": "Town Hall", "starts_at": "2099-12-01T19:00:00Z", "price_inr": 500}
 
 
 class FakePublisher:
@@ -78,14 +79,19 @@ def admin():
 def make_event(admin, seats=3):
     res = admin.post(
         "/events",
-        json={"name": "Show", "starts_at": "2026-12-01T19:00:00Z", "seats": seats},
+        json={**EVENT, "seats": seats},
     )
     assert res.status_code == 201
     return res.json()["id"]
 
 
-def book(client, event_id, seat="S1"):
-    return client.post(f"/events/{event_id}/bookings", json={"seat_label": seat})
+def book(client, event_id, *seats):
+    return client.post(f"/events/{event_id}/bookings", json={"seat_labels": list(seats or ["S1"])})
+
+
+def start_event(event_id):
+    with pool.connection() as conn:
+        conn.execute("UPDATE events SET starts_at = now() - interval '1 hour' WHERE id = %s", (event_id,))
 
 
 def push(client, booking_id):
@@ -147,7 +153,7 @@ def test_forged_and_expired_tokens_are_rejected(user):
 
 
 def test_only_admins_create_events(user, admin):
-    body = {"name": "x", "starts_at": "2026-12-01T19:00:00Z", "seats": 1}
+    body = {**EVENT, "seats": 1}
     assert anonymous().post("/events", json=body).status_code == 401
     assert user.post("/events", json=body).status_code == 403
     assert admin.post("/events", json=body).status_code == 201
@@ -221,7 +227,7 @@ def test_worker_retries_unknown_booking_and_rejects_bad_message():
 def test_ui_is_served():
     res = anonymous().get("/")
     assert res.status_code == 200
-    assert "HOUSEFUL" in res.text
+    assert "HOUSEFULL" in res.text
 
 
 def age_booking(booking_id, minutes=60):
@@ -323,3 +329,105 @@ def test_old_attempts_are_cleaned_up():
     with pool.connection() as conn:
         row = conn.execute("SELECT count(*) AS total FROM login_attempts WHERE key = 'ip:old'").fetchone()
     assert row["total"] == 0
+
+
+def test_multi_seat_booking_totals_price_and_confirms_every_seat(user, admin):
+    event_id = make_event(admin, seats=4)
+    booking = book(user, event_id, "S1", "S2", "S3").json()
+    assert booking["total_inr"] == 1500
+    assert booking["reference"].startswith("HF-")
+    assert push(TestClient(worker_app), booking["id"]).status_code == 204
+    seats = {s["label"]: s["status"] for s in user.get(f"/events/{event_id}/seats").json()["seats"]}
+    assert seats == {"S1": "booked", "S2": "booked", "S3": "booked", "S4": "available"}
+    assert user.get(f"/bookings/{booking['id']}").json()["seat_labels"] == ["S1", "S2", "S3"]
+
+
+def test_booking_is_all_or_nothing(user, admin):
+    event_id = make_event(admin)
+    assert book(user, event_id, "S2").status_code == 202
+    assert book(new_user(), event_id, "S1", "S2").status_code == 409
+    assert user.get(f"/events/{event_id}/seats").json()["available"] == ["S1", "S3"]
+
+
+def test_booking_limits_are_enforced(user, admin):
+    event_id = make_event(admin, seats=8)
+    too_many = [f"S{n}" for n in range(1, 8)]
+    assert book(user, event_id, *too_many).status_code == 422
+    assert book(user, event_id, "S1", "S1").status_code == 422
+    assert book(user, event_id, "S99").status_code == 409
+
+
+def test_overlapping_multi_seat_bookings_never_deadlock_or_double_sell(admin):
+    event_id = make_event(admin, seats=6)
+    orders = [("S1", "S2", "S3"), ("S3", "S2", "S1"), ("S2", "S3", "S4"), ("S4", "S3", "S2")] * 5
+    users = [new_user() for _ in orders]
+    with ThreadPoolExecutor(max_workers=20) as executor:
+        results = list(executor.map(lambda p: book(p[0], event_id, *p[1]).status_code, zip(users, orders)))
+    assert set(results) <= {202, 409}
+    assert 1 <= results.count(202) <= 2
+    with pool.connection() as conn:
+        total = conn.execute(
+            "SELECT count(*) AS held FROM seats WHERE event_id = %s AND status = 'held'", (event_id,)
+        ).fetchone()["held"]
+    assert total == results.count(202) * 3
+
+
+def test_past_events_cannot_be_booked_and_are_hidden(user, admin):
+    event_id = make_event(admin)
+    start_event(event_id)
+    assert book(user, event_id).status_code == 409
+    assert event_id not in [e["id"] for e in anonymous().get("/events").json()]
+
+
+def test_search_matches_name_and_venue_and_treats_wildcards_literally(admin):
+    tag = uuid.uuid4().hex
+    res = admin.post("/events", json={**EVENT, "name": f"Rock {tag}", "seats": 1})
+    event_id = res.json()["id"]
+    client = anonymous()
+    assert [e["id"] for e in client.get("/events", params={"q": tag.upper()}).json()] == [event_id]
+    assert client.get("/events", params={"q": "nothing-matches-this"}).json() == []
+    assert client.get("/events", params={"q": "%" + tag[::-1]}).json() == []
+
+
+def test_cancel_frees_seats_for_someone_else(user, admin):
+    event_id = make_event(admin)
+    booking_id = book(user, event_id, "S1", "S2").json()["id"]
+    assert push(TestClient(worker_app), booking_id).status_code == 204
+    assert user.post(f"/bookings/{booking_id}/cancel").status_code == 200
+    detail = user.get(f"/bookings/{booking_id}").json()
+    assert detail["status"] == "cancelled"
+    assert detail["seat_labels"] == ["S1", "S2"]
+    assert book(new_user(), event_id, "S1", "S2").status_code == 202
+
+
+def test_cancel_rules(user, admin):
+    event_id = make_event(admin)
+    booking_id = book(user, event_id).json()["id"]
+    assert new_user().post(f"/bookings/{booking_id}/cancel").status_code == 404
+    assert anonymous().post(f"/bookings/{booking_id}/cancel").status_code == 401
+    assert user.post(f"/bookings/{booking_id}/cancel").status_code == 200
+    assert user.post(f"/bookings/{booking_id}/cancel").status_code == 409
+    second = book(user, event_id, "S2").json()["id"]
+    start_event(event_id)
+    assert user.post(f"/bookings/{second}/cancel").status_code == 409
+
+
+def test_late_message_does_not_revive_cancelled_booking(user, admin):
+    event_id = make_event(admin)
+    booking_id = book(user, event_id).json()["id"]
+    user.post(f"/bookings/{booking_id}/cancel")
+    assert push(TestClient(worker_app), booking_id).status_code == 204
+    assert user.get(f"/bookings/{booking_id}").json()["status"] == "cancelled"
+    assert "S1" in user.get(f"/events/{event_id}/seats").json()["available"]
+
+
+def test_cancel_and_confirm_race_leaves_consistent_state(user, admin):
+    event_id = make_event(admin)
+    worker = TestClient(worker_app)
+    for label in ("S1", "S2", "S3"):
+        booking_id = book(user, event_id, label).json()["id"]
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            executor.submit(push, worker, booking_id)
+            executor.submit(user.post, f"/bookings/{booking_id}/cancel")
+        assert user.get(f"/bookings/{booking_id}").json()["status"] == "cancelled"
+    assert len(user.get(f"/events/{event_id}/seats").json()["available"]) == 3

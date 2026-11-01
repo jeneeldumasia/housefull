@@ -1,6 +1,6 @@
 from fastapi import HTTPException, Request
 
-from houseful.db import pool
+from housefull.db import pool
 
 EMAIL_LIMIT = 5
 IP_LIMIT = 30

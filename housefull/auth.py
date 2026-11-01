@@ -6,9 +6,9 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError
 from fastapi import Cookie, Depends, HTTPException, Response
 
-from houseful.db import pool
+from housefull.db import pool
 
-COOKIE_NAME = "houseful_session"
+COOKIE_NAME = "housefull_session"
 JWT_ALGORITHM = "HS256"
 SESSION_HOURS = 12
 
@@ -55,11 +55,11 @@ def clear_session(response: Response) -> None:
     response.delete_cookie(COOKIE_NAME)
 
 
-def current_user(houseful_session: str | None = Cookie(default=None)) -> dict:
-    if houseful_session is None:
+def current_user(housefull_session: str | None = Cookie(default=None)) -> dict:
+    if housefull_session is None:
         raise HTTPException(401, "log in first")
     try:
-        claims = jwt.decode(houseful_session, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        claims = jwt.decode(housefull_session, JWT_SECRET, algorithms=[JWT_ALGORITHM])
     except jwt.InvalidTokenError as exc:
         raise HTTPException(401, "log in first") from exc
     with pool.connection() as conn:

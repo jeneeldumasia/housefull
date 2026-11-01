@@ -1,4 +1,4 @@
-# Houseful
+# Housefull
 
 An event ticket booking app built to handle the rush when sales open, and to practise deploying and running a service on Google Cloud.
 

@@ -1,7 +1,9 @@
 const $ = (id) => document.getElementById(id);
 const views = ["view-events", "view-seats", "view-bookings"];
-const BOOKING_LABELS = { pending: "Confirming", confirmed: "Confirmed", expired: "Expired" };
-const state = { user: null, event: null, seat: null, register: false, afterLogin: null };
+const BOOKING_LABELS = { pending: "Confirming", confirmed: "Confirmed", expired: "Expired", cancelled: "Cancelled" };
+const MAX_SEATS = 6;
+const money = (amount) => `₹${amount.toLocaleString("en-IN")}`;
+const state = { user: null, event: null, seats: [], register: false, afterLogin: null };
 
 async function api(path, options = {}) {
   const res = await fetch(path, {
@@ -53,16 +55,18 @@ function renderNav() {
 async function loadEvents() {
   show("view-events");
   const list = $("event-list");
-  const events = await api("/events");
+  const query = $("search").value.trim();
+  const events = await api(`/events?q=${encodeURIComponent(query)}`);
   list.replaceChildren();
-  if (!events.length) list.append(el("p", "muted", "No events yet."));
+  if (!events.length) list.append(el("p", "", query ? "No events match your search." : "No events yet."));
   events.forEach((event) => {
     const card = el("button", "card");
     const full = event.available_seats === 0;
     card.append(
       el("strong", "", event.name),
-      el("small", "", when(event.starts_at)),
-      el("span", full ? "tag full" : "tag", full ? "HOUSEFUL" : `${event.available_seats} of ${event.total_seats} seats left`),
+      el("small", "", event.venue),
+      el("small", "", `${when(event.starts_at)} · ${money(event.price_inr)}`),
+      el("span", full ? "tag full" : "tag", full ? "HOUSEFULL" : `${event.available_seats} of ${event.total_seats} seats left`),
     );
     card.addEventListener("click", () => loadSeats(event.id));
     list.append(card);
@@ -72,11 +76,12 @@ async function loadEvents() {
 async function loadSeats(eventId) {
   const event = await api(`/events/${eventId}/seats`);
   state.event = event;
-  state.seat = null;
+  state.seats = [];
   show("view-seats");
   $("seat-title").textContent = event.name;
-  $("seat-when").textContent = when(event.starts_at);
-  $("houseful-board").hidden = event.available.length > 0;
+  $("seat-when").textContent = `${event.venue} · ${when(event.starts_at)} · ${money(event.price_inr)} per seat`;
+  $("seat-description").textContent = event.description;
+  $("housefull-board").hidden = event.available.length > 0;
   $("book-button").hidden = event.available.length === 0;
   const grid = $("seat-grid");
   grid.replaceChildren();
@@ -91,16 +96,26 @@ async function loadSeats(eventId) {
 }
 
 function selectSeat(label, button) {
-  document.querySelectorAll(".seat.selected").forEach((seat) => seat.classList.remove("selected"));
-  state.seat = label;
-  button.classList.add("selected");
+  if (state.seats.includes(label)) {
+    state.seats = state.seats.filter((seat) => seat !== label);
+    button.classList.remove("selected");
+  } else if (state.seats.length < MAX_SEATS) {
+    state.seats.push(label);
+    button.classList.add("selected");
+  } else {
+    toast(`You can book up to ${MAX_SEATS} seats at a time.`);
+  }
   renderBookButton();
 }
 
 function renderBookButton() {
+  const count = state.seats.length;
   const button = $("book-button");
-  button.disabled = !state.seat;
-  button.textContent = state.seat ? `Book seat ${state.seat}` : "Select a seat";
+  button.disabled = count === 0;
+  button.textContent = count ? `Book ${count} seat${count > 1 ? "s" : ""}` : "Select seats";
+  $("seat-summary").textContent = count
+    ? `${state.seats.join(", ")} · Total ${money(count * state.event.price_inr)}`
+    : "";
 }
 
 async function book() {
@@ -112,9 +127,9 @@ async function book() {
   try {
     await api(`/events/${eventId}/bookings`, {
       method: "POST",
-      body: JSON.stringify({ seat_label: state.seat }),
+      body: JSON.stringify({ seat_labels: state.seats }),
     });
-    toast(`Seat ${state.seat} reserved. Confirming now.`);
+    toast("Seats reserved. Confirming now.");
     await loadBookings();
   } catch (error) {
     if (error.status === 401) {
@@ -123,7 +138,7 @@ async function book() {
       openAuth(book);
       return;
     }
-    toast(error.status === 409 ? "Someone just took that seat. Pick another." : error.message);
+    toast(error.status === 409 ? "Someone just took one of those seats. Pick again." : error.message);
     await loadSeats(eventId);
   }
 }
@@ -139,9 +154,16 @@ async function loadBookings() {
     card.append(
       el("strong", "", booking.event_name),
       el("small", "", when(booking.starts_at)),
-      el("small", "", `Seat ${booking.seat_label}`),
-      el("span", booking.status === "expired" ? "tag full" : "tag", BOOKING_LABELS[booking.status]),
+      el("small", "", booking.venue),
+      el("small", "", `Seats ${booking.seat_labels.join(", ")} · ${money(booking.total_inr)}`),
+      el("div", "reference", booking.reference),
+      el("span", ["expired", "cancelled"].includes(booking.status) ? "tag full" : "tag", BOOKING_LABELS[booking.status]),
     );
+    if (booking.cancellable && ["pending", "confirmed"].includes(booking.status)) {
+      const cancel = el("button", "link card-actions", "Cancel booking");
+      cancel.addEventListener("click", () => cancelBooking(booking));
+      card.append(cancel);
+    }
     list.append(card);
   });
   clearTimeout(loadBookings.timer);
@@ -150,6 +172,17 @@ async function loadBookings() {
       if (!$("view-bookings").hidden) loadBookings();
     }, 1500);
   }
+}
+
+async function cancelBooking(booking) {
+  if (!window.confirm(`Cancel booking ${booking.reference}? Your seats will go back on sale.`)) return;
+  try {
+    await api(`/bookings/${booking.id}/cancel`, { method: "POST" });
+    toast("Booking cancelled.");
+  } catch (error) {
+    toast(error.message);
+  }
+  await loadBookings();
 }
 
 function renderAuthMode() {
@@ -193,6 +226,10 @@ $("auth-switch").addEventListener("click", () => {
   renderAuthMode();
 });
 $("auth-cancel").addEventListener("click", () => $("auth-dialog").close());
+$("search").addEventListener("input", () => {
+  clearTimeout(loadEvents.timer);
+  loadEvents.timer = setTimeout(loadEvents, 250);
+});
 $("nav-login").addEventListener("click", () => openAuth());
 $("nav-bookings").addEventListener("click", loadBookings);
 $("book-button").addEventListener("click", book);
@@ -216,6 +253,9 @@ $("event-form").addEventListener("submit", async (event) => {
         name: form.elements.name.value,
         starts_at: new Date(form.elements.starts_at.value).toISOString(),
         seats: Number(form.elements.seats.value),
+        venue: form.elements.venue.value,
+        description: form.elements.description.value,
+        price_inr: Number(form.elements.price_inr.value),
       }),
     });
     form.reset();

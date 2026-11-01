@@ -3,7 +3,7 @@ from functools import lru_cache
 
 from google.cloud import pubsub_v1
 
-from houseful.config import PROJECT_ID, PUBSUB_TOPIC
+from housefull.config import PROJECT_ID, PUBSUB_TOPIC
 
 
 class BookingPublisher:

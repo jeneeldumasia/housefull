@@ -3,7 +3,7 @@ import os
 
 import psycopg
 
-from houseful.config import DATABASE_URL
+from housefull.config import DATABASE_URL
 
 # Longer than Pub/Sub's retries, so a slow confirmation isn't cancelled.
 HOLD_MINUTES = int(os.environ.get("HOLD_MINUTES", "15"))
@@ -22,10 +22,15 @@ def expire_holds(conn, minutes: int = HOLD_MINUTES) -> int:
                   AND created_at < now() - make_interval(mins => %s::int)
                 FOR UPDATE SKIP LOCKED
             )
+            RETURNING id
+        ),
+        released AS (
+            UPDATE booking_seats SET active = false
+            WHERE booking_id IN (SELECT id FROM expired) AND active
             RETURNING seat_id
         )
         UPDATE seats SET status = 'available'
-        WHERE id IN (SELECT seat_id FROM expired)
+        WHERE id IN (SELECT seat_id FROM released)
         """,
         (minutes,),
     ).rowcount

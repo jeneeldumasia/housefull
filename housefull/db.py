@@ -1,7 +1,7 @@
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
 
-from houseful.config import DATABASE_URL
+from housefull.config import DATABASE_URL
 
 pool = ConnectionPool(
     DATABASE_URL,

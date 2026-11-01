@@ -2,7 +2,7 @@
 from google.api_core.exceptions import AlreadyExists
 from google.cloud import pubsub_v1
 
-from houseful.config import PROJECT_ID, PUBSUB_TOPIC
+from housefull.config import PROJECT_ID, PUBSUB_TOPIC
 
 PUSH_ENDPOINT = "http://worker:8080/pubsub/push"
 
