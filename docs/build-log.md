@@ -7,7 +7,8 @@ A record of every change to Housefull: what changed, why, how it works, and how 
 | Part | Status |
 |---|---|
 | App, UI, login, tests | Working on a laptop |
-| GCP setup script | Written, **not run yet** |
+| GCP setup script | Run once from `main` |
+| Branch protection | On for `main` |
 | Terraform | Not started |
 | GitHub Actions pipelines | Not started |
 | Deployed on GCP | **No** |
@@ -121,7 +122,7 @@ Housefull is an event ticket booking app. The app is deliberately small, because
 
 ## 6. GCP bootstrap script
 
-**What changed:** added `scripts/bootstrap_gcp.sh`. It's written but **hasn't been run yet**.
+**What changed:** added `scripts/bootstrap_gcp.sh`, and ran it once from `main`.
 
 **Why it exists:** GitHub Actions needs access to GCP before it can do anything, but that access has to be created first. This is the bootstrap problem. The script runs once, by hand, from a project owner's account. Terraform then takes these resources over, so later changes go through pull requests.
 
@@ -149,3 +150,24 @@ Housefull is an event ticket booking app. The app is deliberately small, because
 - *Why wasn't this run through GitHub Actions?* Nothing could log in yet. The only alternative was a long-lived key in GitHub, which is what this setup avoids.
 - *What stops a fork using it?* The pool rejects tokens from any other repo id, and GitHub doesn't pass secrets to pull requests from forks.
 - *Is `housefull-deploy` least privilege?* Not strictly. It's limited by project and branch, and the roles could be narrowed later.
+
+---
+
+## 7. Branch protection and access checks
+
+**What changed:** `main` now requires a pull request, and blocks force pushes and deletion. This applies to admins too. A new workflow, `verify-access.yml`, tests the login setup from inside GitHub Actions.
+
+**Why branch protection:** whatever reaches `main` can use `housefull-deploy`, so `main` is effectively the key to the project. Protecting it is a security control as well as a tidy process.
+
+**Why a test workflow:** a setup script finishing only proves resources exist. This proves the rules work, including the ones that should refuse access:
+- The read-only account can read the project.
+- The read-only account **can't** create anything.
+- The deploy account **can't** be used from a pull request.
+- The deploy account works from `main`.
+- The Cloudflare and HCP Terraform tokens work.
+
+**Key idea:** testing that access is denied matters as much as testing that it works. A security rule that's never been tested might not be working at all.
+
+**Likely questions:**
+- *You work alone, so why require pull requests?* Every change gets its automated checks and leaves a record. It also stops a mistaken push going straight to the branch that controls deployments.
+- *No reviewer is required, so what's the protection?* Required approvals are 0, because GitHub doesn't let you approve your own pull request. Required status checks can be added once the pipeline exists.

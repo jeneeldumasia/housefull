@@ -1,0 +1,92 @@
+name: Verify access
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  gcp-plan-account:
+    name: GCP read-only account
+    # Fork pull requests get no id-token, so they can't reach this.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_PLAN_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Can read the project
+        run: gcloud projects describe "$PROJECT" --format='value(projectId)'
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+      - name: Cannot change anything
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          if gcloud pubsub topics create access-check --project "$PROJECT"; then
+            gcloud pubsub topics delete access-check --project "$PROJECT" --quiet
+            echo "The read-only account was able to create a resource" >&2
+            exit 1
+          fi
+
+  deploy-account-blocked:
+    name: GCP deploy account is blocked outside main
+    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - id: auth
+        uses: google-github-actions/auth@v2
+        continue-on-error: true
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - name: Must not be able to use it
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          if gcloud projects describe "$PROJECT" >/dev/null 2>&1; then
+            echo "The deploy account worked outside main" >&2
+            exit 1
+          fi
+
+  gcp-deploy-account:
+    name: GCP deploy account on main
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: gcloud projects describe "$PROJECT" --format='value(projectId)'
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+
+  tokens:
+    name: Cloudflare and HCP Terraform tokens
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cloudflare token is active and can see the domain
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            https://api.cloudflare.com/client/v4/user/tokens/verify | jq -e '.result.status == "active"'
+          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/zones?name=jeneeldumasia.dev" | jq -e '.result | length == 1'
+      - name: HCP Terraform token can reach the organization
+        env:
+          TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
+        run: |
+          curl -fsS -o /dev/null -H "Authorization: Bearer $TF_API_TOKEN" \
+            https://app.terraform.io/api/v2/organizations/Housefull/workspaces
