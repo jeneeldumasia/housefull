@@ -297,6 +297,48 @@ def cancel_booking(booking_id: int, user: dict = Depends(current_user)):
     return {"id": booking_id, "status": "cancelled"}
 
 
+@app.get("/admin/users")
+def list_users(_: dict = Depends(admin_user)):
+    with pool.connection() as conn:
+        return conn.execute(
+            "SELECT id, email, is_admin, created_at FROM users ORDER BY id"
+        ).fetchall()
+
+
+@app.post("/admin/users/{user_id}/grant")
+def grant_admin(user_id: int, _: dict = Depends(admin_user)):
+    with pool.connection() as conn:
+        user = conn.execute(
+            "UPDATE users SET is_admin = true WHERE id = %s RETURNING id, email, is_admin",
+            (user_id,),
+        ).fetchone()
+    if user is None:
+        raise HTTPException(404, "user not found")
+    return user
+
+
+@app.post("/admin/users/{user_id}/revoke")
+def revoke_admin(user_id: int, actor: dict = Depends(admin_user)):
+    if user_id == actor["id"]:
+        raise HTTPException(409, "you can't remove your own admin rights")
+    with pool.connection() as conn:
+        # Locking every admin makes revokes run one at a time. The caller is then
+        # checked again, because a parallel request may have just removed them.
+        # They stay an admin and can't revoke themselves, so one admin always remains.
+        admins = conn.execute(
+            "SELECT id FROM users WHERE is_admin ORDER BY id FOR UPDATE"
+        ).fetchall()
+        if actor["id"] not in [admin["id"] for admin in admins]:
+            raise HTTPException(403, "admin only")
+        user = conn.execute(
+            "UPDATE users SET is_admin = false WHERE id = %s RETURNING id, email, is_admin",
+            (user_id,),
+        ).fetchone()
+    if user is None:
+        raise HTTPException(404, "user not found")
+    return user
+
+
 # Must stay last: it serves everything the routes above don't match.
 app.mount(
     "/",
