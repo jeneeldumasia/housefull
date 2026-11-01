@@ -1,0 +1,43 @@
+{
+  "NumberProxies": 0,
+  "ExposePorts": [],
+  "NAT": true,
+  "Webserver": {
+    "Lockout": 5,
+    "Tunnel": {
+      "Domain": "vpn.housefull",
+      "Port": "8080",
+      "MaxSessionLifetimeMinutes": 480,
+      "SessionInactivityTimeoutMinutes": 60,
+      "DefaultMethod": "totp",
+      "Issuer": "Housefull VPN",
+      "Methods": ["totp"],
+      "HelpMail": "jeneeldumasia18@gmail.com"
+    },
+    "Public": {
+      "ListenAddress": ":8081",
+      "ExternalAddress": "__EXTERNAL_IP__",
+      "DownloadConfigFileName": "housefull.conf"
+    },
+    "Management": { "Enabled": false }
+  },
+  "Wireguard": {
+    "DevName": "wg1",
+    "ListenPort": 53230,
+    "PrivateKey": "__PRIVATE_KEY__",
+    "Address": "10.99.0.1/24",
+    "ServerPersistentKeepAlive": 0
+  },
+  "Clustering": {
+    "ClusterState": "new",
+    "ETCDLogLevel": "error",
+    "ListenAddresses": ["https://127.0.0.1:2380"],
+    "TLSManagerListenURL": "https://127.0.0.1:3434",
+    "DatabaseLocation": "/cfg/data"
+  },
+  "Acls": {
+    "Policies": {
+      "*": { "Mfa": ["172.31.9.10/32"], "Allow": [] }
+    }
+  }
+}

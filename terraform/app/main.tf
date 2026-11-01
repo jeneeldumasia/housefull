@@ -76,3 +76,11 @@ module "monitoring" {
   alert_email = var.alert_email
   hostname    = "${var.subdomain}.${var.domain}"
 }
+
+module "vpn" {
+  source = "./modules/vpn"
+
+  project_id = var.project_id
+  region     = var.region
+  network_id = module.network.network_id
+}

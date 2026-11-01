@@ -6,7 +6,7 @@ An event ticket booking app built to handle the rush when sales open, and to pra
 
 In a load test it handled 100 requests a second with no failures, and no seat was double-booked even when pushed past its limit. See [the load test results](docs/load-test.md).
 
-Every change and the reasons behind it are in [the build log](docs/build-log.md).
+Every change and the reasons behind it are in [the build log](docs/build-log.md). Metrics are private, on Grafana behind [a Wag VPN](docs/vpn-access.md).
 
 ![Housefull home page](docs/images/home.png)
 

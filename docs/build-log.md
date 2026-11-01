@@ -394,3 +394,42 @@ Everything risky comes after the cheap checks, so a failed test or scan costs no
 - *Why no React?* The UI is small, and a framework would add a build step and more to maintain. The project is about delivery, so I kept the frontend simple.
 - *How is user input kept safe?* Text is inserted with `textContent`, so an event name can't run as code.
 - *Why did you redesign it if this is a DevOps project?* Recruiters open the live link first, and a working, polished site makes them read further.
+
+---
+
+## 16. Private Grafana behind a Wag VPN
+
+**What changed:** Grafana runs privately on a small VM, reachable only through a Wag VPN. A public read-only version was built first and dropped before it ever went live, because metrics don't need to be public. Enrolment steps are in `docs/vpn-access.md`.
+
+**What Wag is:** WireGuard with MFA, device enrolment, and route restrictions. Plain WireGuard stops at "this device has the key". Wag adds "and the person passed MFA".
+
+**How a request gets through:**
+1. The laptop connects with WireGuard on UDP port 53230.
+2. It can reach the MFA page, but nothing else.
+3. After a TOTP code, Wag opens a route to Grafana.
+4. Grafana reads metrics from Google Cloud Monitoring using the VM's service account.
+
+**Why a VM:** Cloud Run only serves HTTP requests. A VPN needs a long-running process with root, `iptables`, and a UDP port. This is the project's only always-on server.
+
+**Key decisions:**
+- **Only one internet-facing port.** Grafana has no published port. SSH and enrolment use Identity-Aware Proxy (IAP), so the enrolment page is never public.
+- **The VPN key is made on the VM,** so it never lands in Terraform state or logs.
+- **Wag's admin UI is off,** partly because it prints a password to the logs on startup.
+- **Grafana is on a Docker network,** so reaching it passes through Wag's firewall rules.
+- **A separate Terraform module,** with a small `e2-micro` VM and 1 GB of swap.
+
+**How it was tested:** a local replica had a Wag server, a private target, and a client. Before MFA the target timed out. After a real TOTP sign-in in a browser it returned 200. Wag's own other ports stayed closed through the tunnel. Enrolment data survived a restart.
+
+**Known risks:**
+- **Wag 9.1.12, the latest release, has 2 critical scanner findings:** `CVE-2026-114406` in the image's `ca-certificates` package, and `CVE-2026-33186` in the `grpc` library inside Wag. No newer release exists. The risk is reduced because Wag's clustering listens on localhost, and only WireGuard is exposed. Move to a fixed release when one appears.
+- **Costs more than Cloud Run.** It's billed all the time, at about ₹900 a month.
+- **Single point of failure.** If this VM goes down, you lose the dashboard, but the site stays up.
+- **Dashboards load at boot,** so changes need a VM restart.
+- **Metrics only.** Logs are still in Cloud Logging.
+
+**Likely questions:**
+- *Why not just a Grafana password?* A login page on the internet can be attacked. Behind the VPN there's nothing to attack without a device key and an MFA code.
+- *What's the difference between WireGuard and Wag?* WireGuard handles the encrypted tunnel. Wag adds MFA and per-route access rules on top.
+- *What's a better option at company scale?* An identity-aware proxy with single sign-on, like Cloudflare Access or Google IAP, so there's no VPN to run.
+- *Why did you ship with a critical CVE?* It was a documented decision. There's no fixed version, the affected service isn't exposed, and it's recorded so it gets revisited.
+- *What's IAP?* A Google service that checks your identity before forwarding traffic to a private VM, so port 22 needs no public access.
