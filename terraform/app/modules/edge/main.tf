@@ -39,7 +39,7 @@ resource "google_compute_backend_service" "api" {
 
   # The load balancer sets this itself, and Cloud Run only accepts traffic from
   # the load balancer, so the app can trust it for login limits.
-  custom_request_headers = ["X-Client-IP: {client_ip}"]
+  custom_request_headers = ["X-Client-IP: {client_ip_address}"]
 
   backend {
     group = google_compute_region_network_endpoint_group.api.id

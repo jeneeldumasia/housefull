@@ -291,3 +291,16 @@ Everything risky comes after the cheap checks, so a failed test or scan costs no
 
 **Likely question:**
 - *Has your pipeline ever stopped a bad release?* Yes, on its first run. It blocked a critical CVE in a dependency before any infrastructure was created, and the fix was a one-line version bump through a pull request.
+
+---
+
+## 11. Second Up attempt: a wrong header variable
+
+**What happened:** Terraform created 45 resources, including the database and both services, then failed on the load balancer's backend. Google rejected `{client_ip}` as a header variable.
+
+**Cause:** the variable name was assumed, not checked. `terraform plan` and `terraform validate` passed, because only Google checks that value when the resource is created. The correct name is `{client_ip_address}`.
+
+**Why re-running is safe:** Terraform stores what it has already created in state, so the next apply only creates what's missing.
+
+**Likely question:**
+- *Does a clean plan mean an apply will work?* No. A plan compares your code with the current state. Many values are only checked by the cloud API at creation, which is why a failed apply needs to be safe to re-run.
