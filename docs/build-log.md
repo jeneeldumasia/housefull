@@ -278,3 +278,16 @@ Everything risky comes after the cheap checks, so a failed test or scan costs no
 - *What happens to users during a rollback?* About 10% of requests hit the bad version for a short time, then all traffic returns to the old one.
 - *Why tag images with the commit SHA?* You can always tell exactly what code is running, and `latest` can't tell you that.
 - *Why is scanning only blocking on critical issues?* Blocking on everything would stop releases for problems that have no fix yet.
+
+---
+
+## 10. First Up attempt: the scanner blocked a release
+
+**What happened:** the first Up stopped at the image scan. Trivy found a critical vulnerability, CVE-2026-102268, in PyJWT 2.9.0. Nothing had been created on GCP, because scanning runs before Terraform.
+
+**Fix:** upgraded PyJWT to 2.14.0, the fixed version, then re-ran the tests and the scan.
+
+**Why it mattered:** the flaw is about public key validation. Housefull signs tokens with a shared secret (HS256), so it probably wasn't exploitable here. It was upgraded anyway, because an unused flaw can become a real one, and arguing with a scanner is how exceptions pile up.
+
+**Likely question:**
+- *Has your pipeline ever stopped a bad release?* Yes, on its first run. It blocked a critical CVE in a dependency before any infrastructure was created, and the fix was a one-line version bump through a pull request.
