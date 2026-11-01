@@ -9,8 +9,8 @@ A record of every change to Housefull: what changed, why, how it works, and how 
 | App, UI, login, tests | Working on a laptop |
 | GCP setup script | Run once from `main` |
 | Branch protection | On for `main` |
-| Terraform | Not started |
-| GitHub Actions pipelines | Not started |
+| Terraform | Written, planned in GitHub Actions, **not applied** |
+| GitHub Actions pipelines | Plan on pull requests only |
 | Deployed on GCP | **No** |
 | Load test numbers | None yet |
 
@@ -114,7 +114,7 @@ Housefull is an event ticket booking app. The app is deliberately small, because
 - Google recommends the load balancer. It provides a managed certificate, and lets Cloud Run refuse traffic that doesn't come through it.
 - It costs money while running, so it only exists during demos.
 
-**To do when this is built:** with a load balancer in front, the last `X-Forwarded-For` address is the load balancer itself, so `client_ip` must change or every user would share one login limit.
+**Login limits and the load balancer:** see entry 8.
 
 **Delivery rule:** the laptop is for development only. All infrastructure changes go through GitHub Actions, and secrets live in GitHub.
 
@@ -175,3 +175,52 @@ Housefull is an event ticket booking app. The app is deliberately small, because
 **Likely questions:**
 - *You work alone, so why require pull requests?* Every change gets its automated checks and leaves a record. It also stops a mistaken push going straight to the branch that controls deployments.
 - *No reviewer is required, so what's the protection?* Required approvals are 0, because GitHub doesn't let you approve your own pull request. Required status checks can be added once the pipeline exists.
+
+---
+
+## 8. Terraform
+
+**What changed:** all the infrastructure is now written as Terraform in `terraform/`, and pull requests run `terraform plan` in GitHub Actions. **Nothing has been applied, so none of this exists on GCP yet.**
+
+**Who does what:** code is written on a laptop and merged by pull request. Terraform only runs in GitHub Actions. State is stored in HCP Terraform, in local execution mode: HCP keeps the state and the lock, and the run happens in GitHub Actions, where the Workload Identity login is.
+
+**Two stacks:**
+- `terraform/access`: the Workload Identity pool and CI service accounts, imported from the bootstrap script.
+- `terraform/app`: everything else.
+
+They're separate so that destroying the app after a demo can never remove the access needed to bring it back.
+
+**What `terraform/app` creates:**
+
+| Module | Creates | Why |
+|---|---|---|
+| `network` | VPC, subnet, peering to Google's network | Gives the database a private address |
+| `database` | Cloud SQL PostgreSQL, user, connection secret | No public IP, and encrypted connections only |
+| `messaging` | Pub/Sub topic, subscription, dead-letter topic | Retries 5 times, then keeps the failed message |
+| `services` | API, worker, migration and expiry jobs, schedule, service accounts, JWT secret | One identity per job |
+| `edge` | Load balancer, certificate, DNS record | HTTPS on `housefull.jeneeldumasia.dev` |
+
+**Request path:** browser, Cloudflare DNS lookup, Google load balancer, API on Cloud Run, database over the private network.
+
+**Key decisions:**
+- **Connection limits are calculated.** The smallest database allows about 25 connections. Instance limits and pool sizes are set so the most we can open is 20: 3 API instances with 4 each, 2 workers with 3 each, plus 2 for jobs. Without this, autoscaling would overload the database under traffic.
+- **The API only accepts traffic from the load balancer,** so the `run.app` address is refused.
+- **`invoker_iam_disabled` instead of `allUsers`.** The ingress rule already restricts access, and organization policies often block `allUsers`.
+- **The worker accepts internal traffic only,** and only the Pub/Sub identity can call it. Pub/Sub signs each request with an OIDC token.
+- **Cloudflare is DNS only,** so the load balancer sees the real client address and Google can issue the certificate.
+- **The database name has a random suffix,** because Cloud SQL names can't be reused for about a week, and this one gets destroyed between demos.
+- **Backups are off,** because this is demo data. That wouldn't be right for a real service, and it's worth saying so.
+- **Secret values are in Terraform state.** The generated passwords must exist somewhere, so state needs to be protected. It's held in HCP Terraform, not in the repo.
+
+**Login limits changed:** behind a load balancer, the last `X-Forwarded-For` address isn't the user. The load balancer now sets its own `X-Client-IP` header, and the app reads that. Every user would otherwise have shared one IP limit. This still needs checking on the live site.
+
+**Chicken and egg:**
+- The subscription needs the worker's URL, and the worker's service needs the topic. So the topic has its own small module, which breaks the cycle.
+- Cloud Run needs an image, but the registry that stores it is created by the same Terraform. The first run uses Google's sample image, then CI swaps in the real one.
+
+**Likely questions:**
+- *How does Cloud Run reach a private database?* Direct VPC egress gives instances an address in the subnet, and the subnet reaches Cloud SQL through peering.
+- *What happens if Terraform state is lost?* Terraform forgets what it manages. Everything has to be imported again, which is why state is stored remotely with locking.
+- *Why not put the database password straight in an environment variable?* It would be visible in the service configuration. Secret Manager keeps it out, and only named service accounts can read it.
+- *What's the single point of failure?* The database. It's one small instance in one zone. A real service would use high availability and backups.
+- *Why is this split into modules?* Each one has a clear job, and could be reused for another environment.
