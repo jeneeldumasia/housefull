@@ -7,12 +7,12 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from housefullll.api import app as api_app
-from housefullll.auth import COOKIE_NAME
-from housefullll.db import pool
-from housefullll.limits import EMAIL_LIMIT, IP_LIMIT
-from housefullll.messaging import get_publisher
-from housefullll.worker import app as worker_app
+from housefull.api import app as api_app
+from housefull.auth import COOKIE_NAME
+from housefull.db import pool
+from housefull.limits import EMAIL_LIMIT, IP_LIMIT
+from housefull.messaging import get_publisher
+from housefull.worker import app as worker_app
 from scripts.expire_holds import expire_holds
 
 PASSWORD = "correct-horse"
