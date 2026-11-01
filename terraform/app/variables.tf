@@ -32,3 +32,9 @@ variable "database_tier" {
   type        = string
   default     = "db-f1-micro"
 }
+
+variable "alert_email" {
+  description = "Where alerts are sent."
+  type        = string
+  sensitive   = true
+}

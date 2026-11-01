@@ -252,6 +252,7 @@ resource "google_cloud_run_v2_job" "this" {
   for_each = {
     migrate      = "scripts.migrate"
     expire-holds = "scripts.expire_holds"
+    make-admin   = "scripts.make_admin"
   }
 
   name                = "housefull-${each.key}"
@@ -311,7 +312,7 @@ resource "google_cloud_run_v2_job_iam_member" "scheduler_runs_expiry" {
 resource "google_cloud_scheduler_job" "expire_holds" {
   name      = "housefull-expire-holds"
   region    = var.region
-  schedule  = "*/5 * * * *"
+  schedule  = "*/15 * * * *"
   time_zone = "Asia/Kolkata"
 
   http_target {

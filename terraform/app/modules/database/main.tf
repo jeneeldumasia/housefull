@@ -35,8 +35,14 @@ resource "google_sql_database_instance" "main" {
       ssl_mode        = "ENCRYPTED_ONLY"
     }
 
+    # Kept for 7 days. Down deletes these along with the instance.
     backup_configuration {
-      enabled = false
+      enabled    = true
+      start_time = "20:30"
+
+      backup_retention_settings {
+        retained_backups = 7
+      }
     }
   }
 }

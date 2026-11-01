@@ -10,8 +10,8 @@ A record of every change to Housefull: what changed, why, how it works, and how 
 | GCP setup script | Run once from `main` |
 | Branch protection | On for `main` |
 | Terraform | Written, planned in GitHub Actions, **not applied** |
-| GitHub Actions pipelines | Written, **Up and Down never run yet** |
-| Deployed on GCP | **No** |
+| GitHub Actions pipelines | Up works; rollback and Down **not tested yet** |
+| Deployed on GCP | App released; public site waiting on its certificate |
 | Load test numbers | None yet |
 
 Only claim what's done. If this table says "not started", don't talk about it as finished.
@@ -229,7 +229,7 @@ They're separate so that destroying the app after a demo can never remove the ac
 
 ## 9. Deploy workflows
 
-**What changed:** four workflows and two scripts. **The Up and Down workflows haven't been run yet, so the app still isn't on GCP.**
+**What changed:** four workflows and two scripts. Up has since been run. See entries 10 to 12.
 
 | Workflow | Runs when | What it does |
 |---|---|---|
@@ -304,3 +304,26 @@ Everything risky comes after the cheap checks, so a failed test or scan costs no
 
 **Likely question:**
 - *Does a clean plan mean an apply will work?* No. A plan compares your code with the current state. Many values are only checked by the cloud API at creation, which is why a failed apply needs to be safe to re-run.
+
+---
+
+## 12. Getting ready to stay online
+
+**What changed:** five fixes for leaving the site public, and a release safety check.
+
+| Risk | Fix |
+|---|---|
+| Open sign-ups | Sign-ups close at 200 accounts, so abuse has a limit. Emails still aren't verified, because that needs an email provider. |
+| No admin | `grant-admin.yml` runs a Cloud Run job to promote a registered user. |
+| No backups | Daily automated Cloud SQL backups, kept for 7 days. Down deletes them too. |
+| No alerts | Email alerts for the site being down, repeated server errors, and bookings in the dead-letter queue. |
+| Seat expiry job | Runs every 15 minutes, not every 5, because holds last 15 minutes anyway. |
+
+**A correction:** the expiry job doesn't wake the database. Cloud SQL runs all the time. Cloud Run is what scales to zero.
+
+**Release safety:** the gradual release tests through the public address. If the certificate wasn't ready, every request would fail, and a healthy release would be rolled back. It now waits for the site first, and leaves traffic alone if the site never comes up.
+
+**Likely questions:**
+- *How would you know if the site went down?* A Cloud Monitoring uptime check calls `/health` from several locations and emails an alert.
+- *Why alert on the dead-letter queue?* A message only lands there after 5 failed attempts, so one message means a customer's booking wasn't confirmed.
+- *Are the backups tested?* No. A backup you've never restored is only a hope, and a real service would test restores.

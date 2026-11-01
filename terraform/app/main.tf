@@ -69,3 +69,10 @@ module "edge" {
   subdomain        = var.subdomain
   api_service_name = module.services.api_name
 }
+
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  alert_email = var.alert_email
+  hostname    = "${var.subdomain}.${var.domain}"
+}
