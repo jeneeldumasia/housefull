@@ -12,3 +12,8 @@ output "image_repository" {
   description = "Where CI pushes images."
   value       = "${var.region}-docker.pkg.dev/${var.project_id}/${google_artifact_registry_repository.images.repository_id}"
 }
+
+output "grafana_url" {
+  description = "Public dashboard address."
+  value       = "https://${var.grafana_subdomain}.${var.domain}"
+}

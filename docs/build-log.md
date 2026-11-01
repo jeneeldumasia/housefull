@@ -394,3 +394,28 @@ Everything risky comes after the cheap checks, so a failed test or scan costs no
 - *Why no React?* The UI is small, and a framework would add a build step and more to maintain. The project is about delivery, so I kept the frontend simple.
 - *How is user input kept safe?* Text is inserted with `textContent`, so an event name can't run as code.
 - *Why did you redesign it if this is a DevOps project?* Recruiters open the live link first, and a working, polished site makes them read further.
+
+---
+
+## 16. Grafana
+
+**What changed:** a public, read-only Grafana dashboard at `grafana.jeneeldumasia.dev`, showing requests, response times, instances, failed bookings, and database load.
+
+**How it works:** Grafana runs as its own Cloud Run service and reads from Google Cloud Monitoring. Google already collects these metrics, so nothing extra is installed. The dashboard and data source are files in the repo, so a rebuild always gives the same result. This is called provisioning, or dashboards as code.
+
+**Key decisions:**
+- **Cloud Run, not a VM.** It scales to zero, so it costs almost nothing when nobody's looking. The trade-off is 10 to 20 seconds of startup for the first visitor.
+- **No stored key.** Grafana logs in as its own service account, which only has `monitoring.viewer`.
+- **Read-only.** Anonymous visitors are Viewers. The login form and basic auth are off, Explore is off, and the admin password is random and thrown away at startup.
+- **No Prometheus or Loki.** They'd need something running all the time. For one small app, Google's metrics are enough.
+- **Pinned and scanned.** Grafana 12.2.1 had critical vulnerabilities, so it uses 13.3.0, which scanned clean. The deploy scans it again.
+- **A separate certificate,** so adding Grafana can't disturb the live site's certificate.
+
+**Known limits:**
+- Anyone can view these metrics, and a determined visitor could query other metrics in this project. They're read-only and don't include customer data. The project ID is visible to them too.
+- It shows metrics only, with no logs or traces. Logs stay in Cloud Logging.
+
+**Likely questions:**
+- *Why Grafana when Google already has dashboards?* Grafana works across clouds and data sources, and dashboards live in Git.
+- *Is a public dashboard safe?* It's read-only with no login, and its service account can only read metrics. A real company would put it behind single sign-on.
+- *What's the difference between monitoring and observability?* Monitoring tells you something is wrong. Observability, through metrics, logs, and traces together, helps you work out why.

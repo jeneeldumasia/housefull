@@ -21,6 +21,12 @@ variable "subdomain" {
   default     = "housefull"
 }
 
+variable "grafana_subdomain" {
+  description = "Name under the zone for the public dashboard."
+  type        = string
+  default     = "grafana"
+}
+
 variable "image" {
   description = "Container image to run. CI passes the image built for the commit."
   type        = string

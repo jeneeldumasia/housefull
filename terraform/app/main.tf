@@ -55,6 +55,7 @@ module "services" {
   database_url_secret = module.database.url_secret_id
   bookings_topic_id   = module.messaging_topic.topic_id
   bookings_topic_name = module.messaging_topic.topic_name
+  grafana_hostname    = "${var.grafana_subdomain}.${var.domain}"
 }
 
 module "messaging_topic" {
@@ -64,10 +65,12 @@ module "messaging_topic" {
 module "edge" {
   source = "./modules/edge"
 
-  region           = var.region
-  domain           = var.domain
-  subdomain        = var.subdomain
-  api_service_name = module.services.api_name
+  region               = var.region
+  domain               = var.domain
+  subdomain            = var.subdomain
+  api_service_name     = module.services.api_name
+  grafana_subdomain    = var.grafana_subdomain
+  grafana_service_name = module.services.grafana_name
 }
 
 module "monitoring" {

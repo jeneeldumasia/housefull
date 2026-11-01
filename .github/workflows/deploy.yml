@@ -121,6 +121,16 @@ jobs:
         env:
           IMAGE: ${{ steps.image.outputs.image }}
         run: gcloud run deploy housefull-worker --region "$REGION" --image "$IMAGE" --quiet
+      - name: Release Grafana
+        run: |
+          repository="$(terraform -chdir=terraform/app output -raw image_repository)"
+          image="$repository/grafana:$GITHUB_SHA"
+          docker build -t "$image" monitoring/grafana
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.56.2 image --severity CRITICAL --ignore-unfixed \
+            --exit-code 1 --no-progress "$image"
+          docker push "$image"
+          gcloud run deploy housefull-grafana --region "$REGION" --image "$image" --quiet
       - name: Wait for the public site
         run: |
           # A new certificate can take a while to issue after DNS is set.

@@ -2,7 +2,7 @@
 
 An event ticket booking app built to handle the rush when sales open, and to practise deploying and running a service on Google Cloud.
 
-**Live at https://housefull.jeneeldumasia.dev**
+**Live at https://housefull.jeneeldumasia.dev**, with public metrics at https://grafana.jeneeldumasia.dev
 
 In a load test it handled 100 requests a second with no failures, and no seat was double-booked even when pushed past its limit. See [the load test results](docs/load-test.md).
 

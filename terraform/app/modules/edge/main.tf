@@ -14,8 +14,17 @@ variable "api_service_name" {
   type = string
 }
 
+variable "grafana_subdomain" {
+  type = string
+}
+
+variable "grafana_service_name" {
+  type = string
+}
+
 locals {
-  hostname = "${var.subdomain}.${var.domain}"
+  hostname         = "${var.subdomain}.${var.domain}"
+  grafana_hostname = "${var.grafana_subdomain}.${var.domain}"
 }
 
 resource "google_compute_global_address" "public" {
@@ -46,9 +55,39 @@ resource "google_compute_backend_service" "api" {
   }
 }
 
+resource "google_compute_region_network_endpoint_group" "grafana" {
+  name                  = "housefull-grafana"
+  region                = var.region
+  network_endpoint_type = "SERVERLESS"
+
+  cloud_run {
+    service = var.grafana_service_name
+  }
+}
+
+resource "google_compute_backend_service" "grafana" {
+  name                  = "housefull-grafana"
+  load_balancing_scheme = "EXTERNAL_MANAGED"
+  protocol              = "HTTPS"
+
+  backend {
+    group = google_compute_region_network_endpoint_group.grafana.id
+  }
+}
+
 resource "google_compute_url_map" "https" {
   name            = "housefull-https"
   default_service = google_compute_backend_service.api.id
+
+  host_rule {
+    hosts        = [local.grafana_hostname]
+    path_matcher = "grafana"
+  }
+
+  path_matcher {
+    name            = "grafana"
+    default_service = google_compute_backend_service.grafana.id
+  }
 }
 
 resource "google_compute_managed_ssl_certificate" "main" {
@@ -59,10 +98,22 @@ resource "google_compute_managed_ssl_certificate" "main" {
   }
 }
 
+# A separate certificate, so adding Grafana doesn't reissue the live site's.
+resource "google_compute_managed_ssl_certificate" "grafana" {
+  name = "housefull-grafana"
+
+  managed {
+    domains = [local.grafana_hostname]
+  }
+}
+
 resource "google_compute_target_https_proxy" "main" {
-  name             = "housefull"
-  url_map          = google_compute_url_map.https.id
-  ssl_certificates = [google_compute_managed_ssl_certificate.main.id]
+  name    = "housefull"
+  url_map = google_compute_url_map.https.id
+  ssl_certificates = [
+    google_compute_managed_ssl_certificate.main.id,
+    google_compute_managed_ssl_certificate.grafana.id,
+  ]
 }
 
 resource "google_compute_global_forwarding_rule" "https" {
@@ -104,6 +155,15 @@ data "cloudflare_zone" "main" {
 resource "cloudflare_record" "app" {
   zone_id = data.cloudflare_zone.main.id
   name    = var.subdomain
+  type    = "A"
+  content = google_compute_global_address.public.address
+  proxied = false
+  ttl     = 300
+}
+
+resource "cloudflare_record" "grafana" {
+  zone_id = data.cloudflare_zone.main.id
+  name    = var.grafana_subdomain
   type    = "A"
   content = google_compute_global_address.public.address
   proxied = false

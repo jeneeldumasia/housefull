@@ -26,6 +26,10 @@ variable "bookings_topic_name" {
   type = string
 }
 
+variable "grafana_hostname" {
+  type = string
+}
+
 locals {
   # db-f1-micro allows about 25 connections, with a few reserved. These limits
   # keep the total under that: (3 x 4) + (2 x 3) + 2 for jobs = 20.
@@ -40,6 +44,7 @@ locals {
     jobs      = "housefull-jobs"
     scheduler = "housefull-scheduler"
     pubsub    = "housefull-pubsub-push"
+    grafana   = "housefull-grafana"
   }
 }
 
@@ -327,8 +332,69 @@ resource "google_cloud_scheduler_job" "expire_holds" {
   depends_on = [google_cloud_run_v2_job_iam_member.scheduler_runs_expiry]
 }
 
+resource "google_project_iam_member" "grafana_reads_metrics" {
+  project = var.project_id
+  role    = "roles/monitoring.viewer"
+  member  = google_service_account.this["grafana"].member
+}
+
+# Scales to zero, so it only costs money while someone has it open.
+resource "google_cloud_run_v2_service" "grafana" {
+  name                = "housefull-grafana"
+  location            = var.region
+  deletion_protection = false
+
+  # Same rule as the API: public through the load balancer, and nowhere else.
+  ingress              = "INGRESS_TRAFFIC_INTERNAL_LOAD_BALANCER"
+  invoker_iam_disabled = true
+
+  template {
+    service_account       = google_service_account.this["grafana"].email
+    execution_environment = "EXECUTION_ENVIRONMENT_GEN2"
+
+    scaling {
+      min_instance_count = 0
+      max_instance_count = 1
+    }
+
+    containers {
+      image = var.image
+
+      ports {
+        container_port = 3000
+      }
+
+      env {
+        name  = "GCP_PROJECT"
+        value = var.project_id
+      }
+      env {
+        name  = "GF_SERVER_ROOT_URL"
+        value = "https://${var.grafana_hostname}"
+      }
+
+      resources {
+        limits = {
+          cpu    = "1"
+          memory = "512Mi"
+        }
+      }
+    }
+  }
+
+  lifecycle {
+    ignore_changes = [client, client_version, template[0].containers[0].image, template[0].labels, template[0].revision, traffic]
+  }
+
+  depends_on = [google_project_iam_member.grafana_reads_metrics]
+}
+
 output "api_name" {
   value = google_cloud_run_v2_service.api.name
+}
+
+output "grafana_name" {
+  value = google_cloud_run_v2_service.grafana.name
 }
 
 output "worker_url" {
