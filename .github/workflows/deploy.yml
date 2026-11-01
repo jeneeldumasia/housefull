@@ -112,7 +112,9 @@ jobs:
           gcloud run jobs execute housefull-migrate --region "$REGION" --wait --quiet
           gcloud run jobs update housefull-expire-holds --region "$REGION" --image "$IMAGE" --quiet
       - name: Release the API
-        run: scripts/release_api.sh "${{ steps.image.outputs.image }}" "$SITE_URL"
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: scripts/release_api.sh "$IMAGE" "$SITE_URL"
       - name: Release the worker
         env:
           IMAGE: ${{ steps.image.outputs.image }}
