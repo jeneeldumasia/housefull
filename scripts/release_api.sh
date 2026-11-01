@@ -30,6 +30,21 @@ if [[ "$previous_image" == *"cloudrun/container/hello"* ]]; then
   exit 0
 fi
 
+# A gradual release is judged through the public address, so it has to work
+# first. Otherwise a slow certificate would look like a bad release.
+site_ready=false
+for _ in $(seq 1 90); do
+  if curl -fsS -m 10 -o /dev/null "$BASE_URL/health"; then
+    site_ready=true
+    break
+  fi
+  sleep 20
+done
+if [ "$site_ready" != "true" ]; then
+  echo "$BASE_URL isn't reachable, so traffic stays on $previous_revision" >&2
+  exit 1
+fi
+
 roll_back() {
   echo "Rolling back to $previous_revision: $1" >&2
   gcloud run services update-traffic "$SERVICE" --region "$REGION" \

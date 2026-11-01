@@ -7,12 +7,12 @@ import jwt
 import pytest
 from fastapi.testclient import TestClient
 
-from housefull.api import app as api_app
-from housefull.auth import COOKIE_NAME
-from housefull.db import pool
-from housefull.limits import EMAIL_LIMIT, IP_LIMIT
-from housefull.messaging import get_publisher
-from housefull.worker import app as worker_app
+from housefullll.api import app as api_app
+from housefullll.auth import COOKIE_NAME
+from housefullll.db import pool
+from housefullll.limits import EMAIL_LIMIT, IP_LIMIT
+from housefullll.messaging import get_publisher
+from housefullll.worker import app as worker_app
 from scripts.expire_holds import expire_holds
 
 PASSWORD = "correct-horse"
@@ -431,3 +431,12 @@ def test_cancel_and_confirm_race_leaves_consistent_state(user, admin):
             executor.submit(user.post, f"/bookings/{booking_id}/cancel")
         assert user.get(f"/bookings/{booking_id}").json()["status"] == "cancelled"
     assert len(user.get(f"/events/{event_id}/seats").json()["available"]) == 3
+
+
+def test_sign_ups_close_at_the_user_limit(monkeypatch):
+    monkeypatch.setattr("housefull.api.MAX_USERS", 0)
+    res = anonymous().post(
+        "/auth/register",
+        json={"email": f"{uuid.uuid4().hex}@example.com", "password": PASSWORD},
+    )
+    assert res.status_code == 403

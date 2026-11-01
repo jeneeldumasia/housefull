@@ -1,3 +1,4 @@
+import os
 import secrets
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -36,6 +37,7 @@ class Credentials(BaseModel):
 
 
 MAX_SEATS_PER_BOOKING = 6
+MAX_USERS = int(os.environ.get("MAX_USERS", "200"))
 REFERENCE_ALPHABET = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
 
 
@@ -68,6 +70,9 @@ def register(body: Credentials, request: Request, response: Response):
     check_limits(client_ip(request))
     password_hash = hash_password(body.password)
     with pool.connection() as conn:
+        total = conn.execute("SELECT count(*) AS total FROM users").fetchone()["total"]
+        if total >= MAX_USERS:
+            raise HTTPException(403, "sign-ups are closed for now")
         user = conn.execute(
             """
             INSERT INTO users (email, password_hash) VALUES (%s, %s)

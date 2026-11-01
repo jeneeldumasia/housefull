@@ -23,6 +23,7 @@ env:
   TF_IN_AUTOMATION: "true"
   TF_INPUT: "false"
   TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+  TF_VAR_alert_email: ${{ vars.ALERT_EMAIL }}
   TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
   CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
   TERRAFORM_VERSION: 1.17.1
@@ -111,6 +112,7 @@ jobs:
           gcloud run jobs update housefull-migrate --region "$REGION" --image "$IMAGE" --quiet
           gcloud run jobs execute housefull-migrate --region "$REGION" --wait --quiet
           gcloud run jobs update housefull-expire-holds --region "$REGION" --image "$IMAGE" --quiet
+          gcloud run jobs update housefull-make-admin --region "$REGION" --image "$IMAGE" --quiet
       - name: Release the API
         env:
           IMAGE: ${{ steps.image.outputs.image }}
