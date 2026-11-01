@@ -16,29 +16,25 @@ This is a portfolio project. Events are examples, no real tickets are sold, and 
 
 Load tested on the live site, on small Cloud Run instances and the smallest Cloud SQL database:
 
-- **100 requests a second** with no failures, and a 95th percentile response time of 181 ms.
+| Requests a second | Failed | 95% finished within |
+|---:|---:|---:|
+| 10 | 0 | 81 ms |
+| 25 | 0 | 74 ms |
+| 50 | 0 | 85 ms |
+| **100** | **0** | **181 ms** |
+| 200 | 3.2% | 10.2 s |
+| 400 | 73.5% | 11.6 s |
+
 - **No double-bookings.** 1,732 accepted bookings matched exactly 1,732 booked seats.
 - **Past the limit,** Cloud Run refused extra traffic, and the database stayed healthy at about 50% CPU.
 
-Full results and limits are in [the load test report](docs/load-test.md).
+[Read the full load test report](docs/load-test.md) for what was tested and what it found.
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    U[Users] -->|HTTPS| LB[Global load balancer]
-    LB --> API[Cloud Run: API and UI]
-    API --> DB[(Cloud SQL PostgreSQL<br/>private IP)]
-    API -->|publish| PS[Pub/Sub: bookings]
-    PS -->|signed push| W[Cloud Run: worker]
-    W --> DB
-    PS -->|after 5 failed tries| DL[Dead-letter topic]
-    S[Cloud Scheduler] --> J[Cloud Run job: expire seat holds]
-    J --> DB
-    A[Admin device] -->|WireGuard and TOTP| V[VM: Wag VPN]
-    V --> G[Grafana, private]
-    G --> M[Cloud Monitoring]
-```
+![Housefull architecture on Google Cloud](docs/diagrams/architecture.png)
+
+The source is [`docs/diagrams/architecture.drawio`](docs/diagrams/architecture.drawio), which opens in [draw.io](https://app.diagrams.net).
 
 How a booking works:
 
@@ -97,11 +93,8 @@ docker compose --profile test run --build --rm tests
 
 ## Known limits
 
-- The load test ran from one laptop for 60 seconds at each step, so it doesn't show behaviour over hours.
-- Automatic rollback and the Down workflow haven't been tested on real failures yet.
 - The database is a single small instance in one zone, so it's a single point of failure.
-- Wag 9.1.12 has 2 critical scanner findings with no fixed release yet. The reasoning is in [the build log](docs/build-log.md).
-- Emails aren't verified, and sign-ups close at 200 accounts.
+- Sign-ups close at 200 accounts.
 
 ## Documentation
 
