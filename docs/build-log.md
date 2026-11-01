@@ -9,7 +9,8 @@ A record of every change to Housefull: what changed, why, how it works, and how 
 | App, UI, login, tests | Working on a laptop |
 | GCP setup script | Run once from `main` |
 | Branch protection | On for `main` |
-| Terraform | Written, planned in GitHub Actions, **not applied** |
+| Private Grafana | Live behind the Wag VPN, device enrolled, all charts confirmed |
+| Terraform | Applied through GitHub Actions |
 | GitHub Actions pipelines | Up and gradual release work; rollback and Down **not tested yet** |
 | Deployed on GCP | **Yes, live** |
 | Load test | Done, see `docs/load-test.md` |
@@ -419,6 +420,8 @@ Everything risky comes after the cheap checks, so a failed test or scan costs no
 - **A separate Terraform module,** with a small `e2-micro` VM and 1 GB of swap.
 
 **How it was tested:** a local replica had a Wag server, a private target, and a client. Before MFA the target timed out. After a real TOTP sign-in in a browser it returned 200. Wag's own other ports stayed closed through the tunnel. Enrolment data survived a restart.
+
+**Live check:** a real device enrolled and reached Grafana after TOTP. All 7 panels returned real data, including the load test peak of about 148 requests a second, 18 database connections, and 46% database CPU. From the internet, TCP ports 22, 3000, 8080, 8081, and 4433 were closed. The VM runs at about 660 MB of its 969 MB memory, using some swap.
 
 **Known risks:**
 - **Wag 9.1.12, the latest release, has 2 critical scanner findings:** `CVE-2026-114406` in the image's `ca-certificates` package, and `CVE-2026-33186` in the `grpc` library inside Wag. No newer release exists. The risk is reduced because Wag's clustering listens on localhost, and only WireGuard is exposed. Move to a fixed release when one appears.
