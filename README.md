@@ -2,7 +2,7 @@
 
 An event ticket booking app built to handle the rush when sales open, and to practise deploying and running a service on Google Cloud.
 
-Work in progress: the app runs locally, and the GCP deployment is being built.
+Work in progress: the app runs locally, and the GCP deployment is being built. See [the build log](docs/build-log.md) for every change and the reasons behind it.
 
 ## Run it locally
 
