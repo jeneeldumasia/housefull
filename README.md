@@ -2,7 +2,11 @@
 
 An event ticket booking app built to handle the rush when sales open, and to practise deploying and running a service on Google Cloud.
 
-Work in progress: the app runs locally, and the GCP deployment is being built. See [the build log](docs/build-log.md) for every change and the reasons behind it.
+**Live at https://housefull.jeneeldumasia.dev**
+
+In a load test it handled 100 requests a second with no failures, and no seat was double-booked even when pushed past its limit. See [the load test results](docs/load-test.md).
+
+Every change and the reasons behind it are in [the build log](docs/build-log.md).
 
 ## Run it locally
 
