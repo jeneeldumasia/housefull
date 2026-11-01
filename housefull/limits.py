@@ -8,10 +8,11 @@ WINDOW_MINUTES = 15
 
 
 def client_ip(request: Request) -> str:
-    # Google's front end appends the real address last; anything before it is
-    # supplied by the caller and can't be trusted.
-    forwarded = request.headers.get("x-forwarded-for", "").split(",")[-1].strip()
-    return forwarded or (request.client.host if request.client else "unknown")
+    # The load balancer sets this header, replacing anything the caller sent,
+    # and Cloud Run only accepts traffic from the load balancer.
+    return request.headers.get("x-client-ip") or (
+        request.client.host if request.client else "unknown"
+    )
 
 
 def _record(conn, key: str) -> tuple[int, int]:

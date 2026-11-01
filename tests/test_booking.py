@@ -50,7 +50,7 @@ def anonymous():
     return TestClient(
         api_app,
         raise_server_exceptions=False,
-        headers={"x-forwarded-for": uuid.uuid4().hex},
+        headers={"x-client-ip": uuid.uuid4().hex},
     )
 
 
@@ -311,12 +311,12 @@ def test_unknown_email_is_limited_the_same_way():
     assert bad_login(client, email).status_code == 429
 
 
-def test_caller_cannot_dodge_ip_limit_with_a_fake_header():
+def test_forwarded_for_header_cannot_dodge_ip_limit():
     real = uuid.uuid4().hex
     for i in range(IP_LIMIT):
-        client = TestClient(api_app, headers={"x-forwarded-for": f"fake{i}, {real}"})
+        client = TestClient(api_app, headers={"x-client-ip": real, "x-forwarded-for": f"fake{i}"})
         assert bad_login(client, f"{uuid.uuid4().hex}@example.com").status_code == 401
-    client = TestClient(api_app, headers={"x-forwarded-for": f"other, {real}"})
+    client = TestClient(api_app, headers={"x-client-ip": real, "x-forwarded-for": "other"})
     assert bad_login(client, f"{uuid.uuid4().hex}@example.com").status_code == 429
 
 

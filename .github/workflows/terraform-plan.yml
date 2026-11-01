@@ -1,0 +1,60 @@
+name: Terraform plan
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-plan.yml"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  plan:
+    name: Plan ${{ matrix.stack }}
+    # Fork pull requests get no secrets or id-token.
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [access, app]
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    defaults:
+      run:
+        working-directory: terraform/${{ matrix.stack }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+      - name: Use local execution in HCP Terraform
+        # State lives in HCP Terraform, but the run happens here, where the
+        # Workload Identity login is. Remote runs would have no GCP access.
+        env:
+          WORKSPACE: housefull-${{ matrix.stack }}
+        run: |
+          body="{\"data\":{\"type\":\"workspaces\",\"attributes\":{\"name\":\"$WORKSPACE\",\"execution-mode\":\"local\"}}}"
+          api=https://app.terraform.io/api/v2/organizations/Housefull/workspaces
+          auth="Authorization: Bearer $TF_TOKEN_app_terraform_io"
+          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "$auth" \
+            -H 'Content-Type: application/vnd.api+json' -d "$body" "$api")
+          if [ "$code" != 201 ]; then
+            curl -fsS -o /dev/null -X PATCH -H "$auth" \
+              -H 'Content-Type: application/vnd.api+json' -d "$body" "$api/$WORKSPACE"
+          fi
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_PLAN_SERVICE_ACCOUNT }}
+      - run: terraform fmt -check -recursive
+      - run: terraform init
+      - run: terraform validate
+      - run: terraform plan -no-color
