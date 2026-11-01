@@ -8,6 +8,12 @@ In a load test it handled 100 requests a second with no failures, and no seat wa
 
 Every change and the reasons behind it are in [the build log](docs/build-log.md).
 
+![Housefull home page](docs/images/home.png)
+
+| Picking seats | Your tickets |
+|---|---|
+| ![Seat map](docs/images/seats.png) | ![Tickets](docs/images/tickets.png) |
+
 ## Run it locally
 
 Needs Docker with Compose.
