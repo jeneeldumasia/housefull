@@ -3,76 +3,144 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Housefull</title>
+  <title>Housefull | Book your seat before it's gone</title>
+  <meta name="description" content="Housefull is an event ticket booking demo built to handle the rush when sales open.">
+  <meta name="theme-color" content="#140d12">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23140d12'/%3E%3Cpath d='M9 7v18M23 7v18M9 16h14' stroke='%23ffc24b' stroke-width='4' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&family=DM+Mono:wght@500&display=swap">
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header>
-    <a class="brand" href="#" id="home">HOUSEFULL</a>
-    <nav>
-      <button class="link" id="nav-bookings" hidden>My bookings</button>
-      <button class="link" id="nav-users" hidden>Users</button>
+  <a class="skip" href="#main">Skip to content</a>
+  <header class="site-header">
+    <a class="brand" href="#/">HOUSEFULL</a>
+    <nav aria-label="Main">
+      <a class="nav-link" href="#/bookings" id="nav-bookings" hidden>My tickets</a>
+      <a class="nav-link" href="#/users" id="nav-users" hidden>Users</a>
       <span id="nav-email"></span>
-      <button class="link" id="nav-logout" hidden>Log out</button>
-      <button id="nav-login">Log in</button>
+      <button class="ghost small" id="nav-logout" hidden>Log out</button>
+      <button class="small" id="nav-login">Log in</button>
     </nav>
   </header>
 
-  <main>
-    <section id="view-events">
-      <h1>Now booking</h1>
-      <form id="event-form" class="panel" hidden>
-        <h2>Add an event</h2>
-        <div class="fields">
-          <label>Name <input name="name" required maxlength="200"></label>
-          <label>Venue <input name="venue" required maxlength="200"></label>
-          <label>Date and time <input name="starts_at" type="datetime-local" required></label>
-          <label>Seats <input name="seats" type="number" min="1" max="10000" value="40" required></label>
-          <label>Price per seat (₹) <input name="price_inr" type="number" min="0" max="1000000" value="500" required></label>
+  <main id="main" tabindex="-1">
+    <section id="view-events" hidden>
+      <div class="hero">
+        <div class="marquee">
+          <p class="eyebrow">Now booking</p>
+          <h1>Your seat.<br>Before it's gone.</h1>
+          <p class="hero-copy">When sales open, everyone arrives at once. Housefull makes sure each seat goes to exactly one person.</p>
+          <label class="search">
+            <span class="visually-hidden">Search by event or venue</span>
+            <input id="search" type="search" placeholder="Search by event or venue" autocomplete="off">
+          </label>
         </div>
-        <label class="wide">Description <textarea name="description" rows="2" maxlength="2000"></textarea></label>
-        <button type="submit">Create event</button>
-      </form>
-      <input id="search" class="search" type="search" placeholder="Search by event or venue" aria-label="Search events">
-      <div id="event-list" class="cards"></div>
+      </div>
+
+      <details id="admin-panel" class="panel" hidden>
+        <summary>Add an event</summary>
+        <form id="event-form">
+          <div class="fields">
+            <label>Name <input name="name" required maxlength="200"></label>
+            <label>Venue <input name="venue" required maxlength="200"></label>
+            <label>Date and time <input name="starts_at" type="datetime-local" required></label>
+            <label>Seats <input name="seats" type="number" min="1" max="10000" value="40" required></label>
+            <label>Price per seat (₹) <input name="price_inr" type="number" min="0" max="1000000" value="500" required></label>
+          </div>
+          <label>Description <textarea name="description" rows="3" maxlength="2000"></textarea></label>
+          <button type="submit">Create event</button>
+        </form>
+      </details>
+
+      <div class="section-head">
+        <h2 id="events-heading">All events</h2>
+        <p id="events-count" class="muted"></p>
+      </div>
+      <div id="event-list" class="event-grid" aria-live="polite"></div>
     </section>
 
     <section id="view-seats" hidden>
-      <h1 id="seat-title"></h1>
-      <p id="seat-when" class="muted"></p>
-      <p id="seat-description"></p>
-      <div id="housefull-board" class="board" hidden>HOUSEFULL</div>
-      <div class="screen">SCREEN</div>
-      <div id="seat-grid" class="grid"></div>
-      <div class="legend">
-        <span><i class="seat-key"></i> Available</span>
-        <span><i class="seat-key selected"></i> Selected</span>
-        <span><i class="seat-key taken"></i> Taken</span>
+      <a class="back" href="#/">All events</a>
+      <div class="event-header">
+        <div id="seat-poster" class="poster-strip" aria-hidden="true"></div>
+        <div>
+          <h1 id="seat-title"></h1>
+          <p id="seat-when" class="event-meta"></p>
+          <p id="seat-description" class="event-description"></p>
+        </div>
       </div>
-      <p id="seat-summary" class="muted-line"></p>
-      <button id="book-button" disabled>Select seats</button>
+      <div class="booking-layout">
+        <div class="theatre">
+          <div id="housefull-board" class="sold-out-board" hidden>HOUSEFULL</div>
+          <p id="started-note" class="notice" hidden>This event has started, so booking is closed.</p>
+          <div class="screen"><span>Stage</span></div>
+          <div class="seat-scroll">
+            <div id="seat-grid" class="seat-grid"></div>
+          </div>
+          <div class="legend" aria-hidden="true">
+            <span><i class="key"></i> Available</span>
+            <span><i class="key selected"></i> Selected</span>
+            <span><i class="key taken"></i> Taken</span>
+          </div>
+        </div>
+        <aside class="order" aria-label="Your selection">
+          <h2>Your selection</h2>
+          <div id="seat-chips" class="chips"><p class="muted">Pick up to 6 seats.</p></div>
+          <dl class="totals">
+            <div><dt>Seats</dt><dd id="order-count">0</dd></div>
+            <div class="total"><dt>Total</dt><dd id="seat-summary">₹0</dd></div>
+          </dl>
+          <button id="book-button" class="wide" disabled>Select seats</button>
+          <p class="fine">Demo site. No payment is taken.</p>
+        </aside>
+      </div>
     </section>
 
     <section id="view-bookings" hidden>
-      <h1>My bookings</h1>
-      <div id="booking-list" class="cards"></div>
+      <div class="section-head page-head"><h1>My tickets</h1></div>
+      <div id="booking-list" class="ticket-list" aria-live="polite"></div>
     </section>
 
     <section id="view-users" hidden>
-      <h1>Users</h1>
-      <div id="user-list" class="cards"></div>
+      <div class="section-head page-head">
+        <h1>Users</h1>
+        <p id="user-count" class="muted"></p>
+      </div>
+      <div id="user-list" class="user-list"></div>
     </section>
   </main>
 
+  <footer class="site-footer">
+    <p><strong>HOUSEFULL</strong> is a portfolio project by Jeneel Dumasia. Events are examples, and no real tickets are sold.</p>
+    <p>
+      <a href="https://github.com/jeneeldumasia/housefull" rel="noopener">Source code</a>
+      <a href="https://github.com/jeneeldumasia/housefull/blob/main/docs/load-test.md" rel="noopener">Load test results</a>
+    </p>
+  </footer>
+
   <dialog id="auth-dialog">
-    <form id="auth-form" method="dialog">
-      <h2 id="auth-title">Log in</h2>
+    <form id="auth-form">
+      <p class="eyebrow">Housefull</p>
+      <h2 id="auth-title">Welcome back</h2>
       <label>Email <input name="email" type="email" required autocomplete="email"></label>
       <label>Password <input name="password" type="password" required minlength="8" maxlength="128" autocomplete="current-password"></label>
-      <p id="auth-error" class="error" hidden></p>
-      <button type="submit" id="auth-submit">Log in</button>
+      <p id="auth-error" class="error" role="alert" hidden></p>
+      <button type="submit" class="wide" id="auth-submit">Log in</button>
       <button type="button" class="link" id="auth-switch">New here? Create an account</button>
-      <button type="button" class="link" id="auth-cancel">Cancel</button>
+      <button type="button" class="dialog-close" id="auth-cancel" aria-label="Close">×</button>
+    </form>
+  </dialog>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <h2 id="confirm-title"></h2>
+      <p id="confirm-body" class="muted"></p>
+      <div class="dialog-actions">
+        <button class="ghost" value="no">Keep it</button>
+        <button class="danger" id="confirm-yes" value="yes">Confirm</button>
+      </div>
     </form>
   </dialog>
 
