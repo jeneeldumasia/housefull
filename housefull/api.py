@@ -56,7 +56,7 @@ def new_reference() -> str:
     return "HF-" + "".join(secrets.choice(REFERENCE_ALPHABET) for _ in range(8))
 
 
-@app.get("/healthz")
+@app.get("/health")
 def healthz():
     with pool.connection() as conn:
         conn.execute("SELECT 1")

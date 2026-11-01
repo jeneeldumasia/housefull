@@ -154,10 +154,16 @@ resource "google_cloud_run_v2_service" "api" {
         period_seconds        = 5
         failure_threshold     = 10
         http_get {
-          path = "/healthz"
+          path = "/health"
         }
       }
     }
+  }
+
+  # Terraform owns the configuration and CI owns the release. Without this,
+  # every apply would undo the running version and its traffic split.
+  lifecycle {
+    ignore_changes = [client, client_version, template[0].containers[0].image, template[0].labels, template[0].revision, traffic]
   }
 
   depends_on = [
@@ -216,7 +222,20 @@ resource "google_cloud_run_v2_service" "worker" {
           }
         }
       }
+
+      startup_probe {
+        initial_delay_seconds = 2
+        period_seconds        = 5
+        failure_threshold     = 10
+        http_get {
+          path = "/health"
+        }
+      }
     }
+  }
+
+  lifecycle {
+    ignore_changes = [client, client_version, template[0].containers[0].image, template[0].labels, template[0].revision, traffic]
   }
 
   depends_on = [google_secret_manager_secret_iam_member.database_url]
@@ -273,6 +292,10 @@ resource "google_cloud_run_v2_job" "this" {
         }
       }
     }
+  }
+
+  lifecycle {
+    ignore_changes = [client, client_version, template[0].template[0].containers[0].image]
   }
 
   depends_on = [google_secret_manager_secret_iam_member.database_url]

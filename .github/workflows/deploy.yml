@@ -1,0 +1,131 @@
+name: Deploy
+
+# Running this by hand is the "Up" button. A merge to main always updates CI
+# access, but only releases the app if the app is already up, so merging never
+# starts costs by itself.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+# Never let two runs change the same infrastructure at once.
+concurrency:
+  group: housefull-infrastructure
+  cancel-in-progress: false
+
+env:
+  REGION: asia-south1
+  SITE_URL: https://housefull.jeneeldumasia.dev
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+  TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+  TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+  CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+  TERRAFORM_VERSION: 1.17.1
+
+jobs:
+  access:
+    name: Update CI access
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      deploy: ${{ steps.decide.outputs.deploy }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - run: scripts/hcp_workspace.sh housefull-access
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: terraform init
+        working-directory: terraform/access
+      - run: terraform apply -auto-approve -no-color
+        working-directory: terraform/access
+      - name: Decide whether to release
+        id: decide
+        env:
+          PROJECT: ${{ vars.GCP_PROJECT_ID }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "workflow_dispatch" ]; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          elif gcloud run services describe housefull-api --region "$REGION" --project "$PROJECT" >/dev/null 2>&1; then
+            echo "deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "The app is down, so this merge doesn't release it."
+            echo "deploy=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  release:
+    name: Build and release
+    needs: access
+    if: needs.access.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run the tests
+        run: docker compose --profile test run --build --rm tests
+      - name: Build the image
+        run: docker build --target app -t housefull:candidate .
+      - name: Scan the image
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy:0.56.2 image --severity CRITICAL --ignore-unfixed \
+            --exit-code 1 --no-progress housefull:candidate
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+      - run: scripts/hcp_workspace.sh housefull-app
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v2
+      - run: terraform init
+        working-directory: terraform/app
+      - name: Apply infrastructure
+        run: terraform apply -auto-approve -no-color
+        working-directory: terraform/app
+      - name: Push the image
+        id: image
+        run: |
+          repository="$(terraform -chdir=terraform/app output -raw image_repository)"
+          image="$repository/app:$GITHUB_SHA"
+          gcloud auth configure-docker "$REGION-docker.pkg.dev" --quiet
+          docker tag housefull:candidate "$image"
+          docker push "$image"
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+      - name: Migrate the database
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: |
+          gcloud run jobs update housefull-migrate --region "$REGION" --image "$IMAGE" --quiet
+          gcloud run jobs execute housefull-migrate --region "$REGION" --wait --quiet
+          gcloud run jobs update housefull-expire-holds --region "$REGION" --image "$IMAGE" --quiet
+      - name: Release the API
+        run: scripts/release_api.sh "${{ steps.image.outputs.image }}" "$SITE_URL"
+      - name: Release the worker
+        env:
+          IMAGE: ${{ steps.image.outputs.image }}
+        run: gcloud run deploy housefull-worker --region "$REGION" --image "$IMAGE" --quiet
+      - name: Wait for the public site
+        run: |
+          # A new certificate can take a while to issue after DNS is set.
+          for _ in $(seq 1 90); do
+            if curl -fsS -m 10 -o /dev/null "$SITE_URL/health"; then
+              echo "$SITE_URL is up"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::$SITE_URL didn't respond within 30 minutes"
+          exit 1
