@@ -71,22 +71,29 @@ jobs:
         env:
           PROJECT: ${{ vars.GCP_PROJECT_ID }}
 
-  tokens:
-    name: Cloudflare and HCP Terraform tokens
+  cloudflare-token:
+    name: Cloudflare token
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - name: Cloudflare token is active and can see the domain
+      - name: Token can see the domain
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
-          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            https://api.cloudflare.com/client/v4/user/tokens/verify | jq -e '.result.status == "active"'
-          curl -fsS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/zones?name=jeneeldumasia.dev" | jq -e '.result | length == 1'
-      - name: HCP Terraform token can reach the organization
+          test -n "$CLOUDFLARE_API_TOKEN"
+          curl -sS -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/zones?name=jeneeldumasia.dev" \
+            | jq -e '{success, errors, zones: (.result | length)} | ., (.success and .zones == 1)'
+
+  hcp-terraform-token:
+    name: HCP Terraform token
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - name: Token can reach the organization
         env:
           TF_API_TOKEN: ${{ secrets.TF_API_TOKEN }}
         run: |
+          test -n "$TF_API_TOKEN"
           curl -fsS -o /dev/null -H "Authorization: Bearer $TF_API_TOKEN" \
             https://app.terraform.io/api/v2/organizations/Housefull/workspaces
