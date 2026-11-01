@@ -1,0 +1,44 @@
+name: Down
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: Type DOWN to destroy the app and its database
+        required: true
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: housefull-infrastructure
+  cancel-in-progress: false
+
+jobs:
+  destroy:
+    name: Destroy the app
+    if: github.ref == 'refs/heads/main' && inputs.confirm == 'DOWN'
+    runs-on: ubuntu-latest
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+      TF_VAR_project_id: ${{ vars.GCP_PROJECT_ID }}
+      TF_TOKEN_app_terraform_io: ${{ secrets.TF_API_TOKEN }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    defaults:
+      run:
+        working-directory: terraform/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.17.1
+          terraform_wrapper: false
+      - run: ../../scripts/hcp_workspace.sh housefull-app
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - run: terraform init
+      - run: terraform destroy -auto-approve -no-color

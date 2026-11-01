@@ -10,7 +10,7 @@ A record of every change to Housefull: what changed, why, how it works, and how 
 | GCP setup script | Run once from `main` |
 | Branch protection | On for `main` |
 | Terraform | Written, planned in GitHub Actions, **not applied** |
-| GitHub Actions pipelines | Plan on pull requests only |
+| GitHub Actions pipelines | Written, **Up and Down never run yet** |
 | Deployed on GCP | **No** |
 | Load test numbers | None yet |
 
@@ -224,3 +224,57 @@ They're separate so that destroying the app after a demo can never remove the ac
 - *Why not put the database password straight in an environment variable?* It would be visible in the service configuration. Secret Manager keeps it out, and only named service accounts can read it.
 - *What's the single point of failure?* The database. It's one small instance in one zone. A real service would use high availability and backups.
 - *Why is this split into modules?* Each one has a clear job, and could be reused for another environment.
+
+---
+
+## 9. Deploy workflows
+
+**What changed:** four workflows and two scripts. **The Up and Down workflows haven't been run yet, so the app still isn't on GCP.**
+
+| Workflow | Runs when | What it does |
+|---|---|---|
+| `tests.yml` | Pull request | App tests |
+| `terraform-plan.yml` | Pull request touching Terraform | Previews changes with the read-only account |
+| `deploy.yml` | Merge to `main`, or run by hand (Up) | Updates CI access, then releases |
+| `down.yml` | Run by hand, must type `DOWN` | Destroys the app and its data |
+
+**Merging never starts costs.** A merge always updates CI access, which is free. It only releases the app if the app is already running. Running `deploy.yml` by hand is the Up button.
+
+**Release order:**
+1. Run the tests.
+2. Build the image and scan it with Trivy. A critical vulnerability with a fix available stops the release.
+3. Apply Terraform.
+4. Push the image, tagged with the commit SHA.
+5. Run migrations as a Cloud Run job.
+6. Release the API gradually.
+7. Release the worker.
+8. Wait for the public site.
+
+Everything risky comes after the cheap checks, so a failed test or scan costs nothing.
+
+**Gradual release in `scripts/release_api.sh`:**
+1. Deploy the new version with 0% traffic. If it fails its startup check, the release stops.
+2. Move 10% of traffic to it.
+3. Send 200 requests, and check the logs for server errors from the new version.
+4. Check that it served at least one request. Zero would mean it was never tested.
+5. Any failure sends all traffic back to the old version. Otherwise it gets 100%.
+
+**Key decisions:**
+- **Terraform owns configuration, CI owns releases.** `ignore_changes` stops Terraform undoing the running image or traffic split.
+- **Migrations run before code,** and must work with both versions. **A rollback doesn't undo a migration,** because old code keeps running on the new schema. So changes must be backward compatible.
+- **No hidden-URL test.** Cloud Run's tagged URLs follow the same ingress rule, so the load-balancer-only API can't be reached that way. That's why it's tested with a small share of real traffic.
+- **`/healthz` became `/health`,** because Cloud Run reserves `/healthz` on public URLs.
+- **Trivy runs from a pinned Docker image,** so a moved tag on a third-party GitHub Action can't change what runs.
+- **The first release skips the gradual step,** because nothing is running yet and the certificate may not be ready.
+- **Runs can't overlap.** A shared concurrency group stops two runs changing infrastructure together.
+
+**Known limits:**
+- Only `/health` is tested during the 10% stage, so a bug in booking wouldn't be caught there.
+- The worker is released directly, with no gradual step or automatic rollback.
+- Down may fail on its first try. Google can hold subnet addresses for a while after Cloud Run is deleted. Rerun it later if so.
+
+**Likely questions:**
+- *What happens if a migration fails?* The job fails, the workflow stops, and the running version isn't touched.
+- *What happens to users during a rollback?* About 10% of requests hit the bad version for a short time, then all traffic returns to the old one.
+- *Why tag images with the commit SHA?* You can always tell exactly what code is running, and `latest` can't tell you that.
+- *Why is scanning only blocking on critical issues?* Blocking on everything would stop releases for problems that have no fix yet.

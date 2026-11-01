@@ -36,20 +36,7 @@ jobs:
           terraform_version: 1.17.1
           terraform_wrapper: false
       - name: Use local execution in HCP Terraform
-        # State lives in HCP Terraform, but the run happens here, where the
-        # Workload Identity login is. Remote runs would have no GCP access.
-        env:
-          WORKSPACE: housefull-${{ matrix.stack }}
-        run: |
-          body="{\"data\":{\"type\":\"workspaces\",\"attributes\":{\"name\":\"$WORKSPACE\",\"execution-mode\":\"local\"}}}"
-          api=https://app.terraform.io/api/v2/organizations/Housefull/workspaces
-          auth="Authorization: Bearer $TF_TOKEN_app_terraform_io"
-          code=$(curl -sS -o /dev/null -w '%{http_code}' -X POST -H "$auth" \
-            -H 'Content-Type: application/vnd.api+json' -d "$body" "$api")
-          if [ "$code" != 201 ]; then
-            curl -fsS -o /dev/null -X PATCH -H "$auth" \
-              -H 'Content-Type: application/vnd.api+json' -d "$body" "$api/$WORKSPACE"
-          fi
+        run: ../../scripts/hcp_workspace.sh "housefull-${{ matrix.stack }}"
       - uses: google-github-actions/auth@v2
         with:
           workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
