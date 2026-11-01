@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Houseful</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <a class="brand" href="#" id="home">HOUSEFUL</a>
+    <nav>
+      <button class="link" id="nav-bookings" hidden>My bookings</button>
+      <span id="nav-email"></span>
+      <button class="link" id="nav-logout" hidden>Log out</button>
+      <button id="nav-login">Log in</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="view-events">
+      <h1>Now booking</h1>
+      <form id="event-form" class="panel" hidden>
+        <h2>Add an event</h2>
+        <div class="fields">
+          <label>Name <input name="name" required maxlength="200"></label>
+          <label>Date and time <input name="starts_at" type="datetime-local" required></label>
+          <label>Seats <input name="seats" type="number" min="1" max="10000" value="40" required></label>
+        </div>
+        <button type="submit">Create event</button>
+      </form>
+      <div id="event-list" class="cards"></div>
+    </section>
+
+    <section id="view-seats" hidden>
+      <h1 id="seat-title"></h1>
+      <p id="seat-when" class="muted"></p>
+      <div id="houseful-board" class="board" hidden>HOUSEFUL</div>
+      <div class="screen">SCREEN</div>
+      <div id="seat-grid" class="grid"></div>
+      <div class="legend">
+        <span><i class="seat-key"></i> Available</span>
+        <span><i class="seat-key selected"></i> Selected</span>
+        <span><i class="seat-key taken"></i> Taken</span>
+      </div>
+      <button id="book-button" disabled>Select a seat</button>
+    </section>
+
+    <section id="view-bookings" hidden>
+      <h1>My bookings</h1>
+      <div id="booking-list" class="cards"></div>
+    </section>
+  </main>
+
+  <dialog id="auth-dialog">
+    <form id="auth-form" method="dialog">
+      <h2 id="auth-title">Log in</h2>
+      <label>Email <input name="email" type="email" required autocomplete="email"></label>
+      <label>Password <input name="password" type="password" required minlength="8" maxlength="128" autocomplete="current-password"></label>
+      <p id="auth-error" class="error" hidden></p>
+      <button type="submit" id="auth-submit">Log in</button>
+      <button type="button" class="link" id="auth-switch">New here? Create an account</button>
+      <button type="button" class="link" id="auth-cancel">Cancel</button>
+    </form>
+  </dialog>
+
+  <div id="toast" role="status" hidden></div>
+  <script src="/app.js"></script>
+</body>
+</html>
