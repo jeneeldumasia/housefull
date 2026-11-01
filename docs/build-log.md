@@ -168,6 +168,10 @@ Housefull is an event ticket booking app. The app is deliberately small, because
 
 **Key idea:** testing that access is denied matters as much as testing that it works. A security rule that's never been tested might not be working at all.
 
+**Two mistakes this caught:**
+- The first Cloudflare check failed with a 401, but the token was fine. Cloudflare's verify call rejects account-owned tokens, so the check was changed to the zone lookup the deployment really needs.
+- The "deploy account is refused" check first passed on any failure, so it could have passed because something else broke. It now requires Google's specific permission error. A negative test has to check why something failed.
+
 **Likely questions:**
 - *You work alone, so why require pull requests?* Every change gets its automated checks and leaves a record. It also stops a mistaken push going straight to the branch that controls deployments.
 - *No reviewer is required, so what's the protection?* Required approvals are 0, because GitHub doesn't let you approve your own pull request. Required status checks can be added once the pipeline exists.

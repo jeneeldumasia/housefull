@@ -52,10 +52,13 @@ jobs:
         env:
           PROJECT: ${{ vars.GCP_PROJECT_ID }}
         run: |
-          if gcloud projects describe "$PROJECT" >/dev/null 2>&1; then
+          if output="$(gcloud projects describe "$PROJECT" 2>&1)"; then
             echo "The deploy account worked outside main" >&2
             exit 1
           fi
+          echo "$output"
+          # Only a refusal from Google counts. Any other failure proves nothing.
+          grep -q 'iam.serviceAccounts.getAccessToken' <<< "$output"
 
   gcp-deploy-account:
     name: GCP deploy account on main
