@@ -1,18 +1,79 @@
 # Housefull
 
-An event ticket booking app built to handle the rush when sales open, and to practise deploying and running a service on Google Cloud.
+An event ticket booking platform on Google Cloud, built around the hardest moment for a booking site: sales open, everyone arrives at once, and no two people can get the same seat.
 
-**Live at https://housefull.jeneeldumasia.dev**
+**Live site: https://housefull.jeneeldumasia.dev**
 
-In a load test it handled 100 requests a second with no failures, and no seat was double-booked even when pushed past its limit. See [the load test results](docs/load-test.md).
-
-Every change and the reasons behind it are in [the build log](docs/build-log.md). Metrics are private, on Grafana behind [a Wag VPN](docs/vpn-access.md).
+This is a portfolio project. Events are examples, no real tickets are sold, and no payment is taken. The app is deliberately small, because the focus is how it's deployed, secured, and run.
 
 ![Housefull home page](docs/images/home.png)
 
 | Picking seats | Your tickets |
 |---|---|
 | ![Seat map](docs/images/seats.png) | ![Tickets](docs/images/tickets.png) |
+
+## Results
+
+Load tested on the live site, on small Cloud Run instances and the smallest Cloud SQL database:
+
+- **100 requests a second** with no failures, and a 95th percentile response time of 181 ms.
+- **No double-bookings.** 1,732 accepted bookings matched exactly 1,732 booked seats.
+- **Past the limit,** Cloud Run refused extra traffic, and the database stayed healthy at about 50% CPU.
+
+Full results and limits are in [the load test report](docs/load-test.md).
+
+## Architecture
+
+```mermaid
+flowchart TD
+    U[Users] -->|HTTPS| LB[Global load balancer]
+    LB --> API[Cloud Run: API and UI]
+    API --> DB[(Cloud SQL PostgreSQL<br/>private IP)]
+    API -->|publish| PS[Pub/Sub: bookings]
+    PS -->|signed push| W[Cloud Run: worker]
+    W --> DB
+    PS -->|after 5 failed tries| DL[Dead-letter topic]
+    S[Cloud Scheduler] --> J[Cloud Run job: expire seat holds]
+    J --> DB
+    A[Admin device] -->|WireGuard and TOTP| V[VM: Wag VPN]
+    V --> G[Grafana, private]
+    G --> M[Cloud Monitoring]
+```
+
+How a booking works:
+
+1. The API locks the seats with a database transaction, so only one person can get them.
+2. It publishes a message to Pub/Sub and replies straight away.
+3. A separate worker confirms the booking, and ignores repeated messages.
+4. If a booking is never confirmed, a scheduled job releases the seats.
+
+## Tech stack
+
+| Area | Tools |
+|---|---|
+| App | Python, FastAPI, PostgreSQL, HTML, CSS, JavaScript |
+| Google Cloud | Cloud Run, Cloud SQL, Pub/Sub, Cloud Load Balancing, Artifact Registry, Secret Manager, Cloud Scheduler, Cloud Monitoring |
+| Infrastructure as Code | Terraform, HCP Terraform |
+| CI/CD | GitHub Actions, Workload Identity Federation |
+| Security | Trivy, Gitleaks, Wag (WireGuard with MFA), IAP |
+| Monitoring and testing | Grafana, Cloud Monitoring, k6, pytest, Playwright |
+
+## Delivery
+
+All infrastructure changes go through pull requests, and `main` is protected.
+
+- **Pull request:** runs the tests and a `terraform plan`, using a read-only account.
+- **Merge to `main`:** runs the tests, scans the image, applies Terraform, and migrates the database. The API is then released through a 10% traffic stage, with automatic rollback if checks fail.
+- **Up and Down:** manual workflows that create or destroy the app, to control cost.
+
+## Security
+
+- **No stored cloud keys.** GitHub Actions logs in with short-lived Workload Identity Federation credentials.
+- **Private database.** Cloud SQL has no public address, and connections are encrypted.
+- **Locked-down services.** The API only accepts traffic from the load balancer, and only Pub/Sub can call the worker.
+- **Least access.** Each service has its own service account.
+- **Application security.** Argon2 password hashing, HttpOnly session cookies, and login limits stored in PostgreSQL.
+- **Private metrics.** Grafana is reachable only through [a Wag VPN](docs/vpn-access.md), with an enrolled device and a TOTP code.
 
 ## Run it locally
 
@@ -28,16 +89,22 @@ Open http://localhost:8080. After signing up, make your account an admin so you 
 docker compose exec api python -m scripts.make_admin you@example.com
 ```
 
-## Run the tests
+Run the tests:
 
 ```bash
-docker compose --profile test run --rm tests
-docker compose --profile test rm -sf test-db
+docker compose --profile test run --build --rm tests
 ```
 
-## How booking works
+## Known limits
 
-1. The API reserves the seat with a single atomic database update, so only one person can get it.
-2. The API publishes a message to Pub/Sub and replies straight away.
-3. A separate worker receives the message and confirms the booking.
-4. If a booking is never confirmed, a scheduled job releases the seat.
+- The load test ran from one laptop for 60 seconds at each step, so it doesn't show behaviour over hours.
+- Automatic rollback and the Down workflow haven't been tested on real failures yet.
+- The database is a single small instance in one zone, so it's a single point of failure.
+- Wag 9.1.12 has 2 critical scanner findings with no fixed release yet. The reasoning is in [the build log](docs/build-log.md).
+- Emails aren't verified, and sign-ups close at 200 accounts.
+
+## Documentation
+
+- [Build log](docs/build-log.md): every change, the reasons behind it, and the trade-offs.
+- [Load test report](docs/load-test.md)
+- [VPN access](docs/vpn-access.md)
