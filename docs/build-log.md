@@ -10,9 +10,9 @@ A record of every change to Housefull: what changed, why, how it works, and how 
 | GCP setup script | Run once from `main` |
 | Branch protection | On for `main` |
 | Terraform | Written, planned in GitHub Actions, **not applied** |
-| GitHub Actions pipelines | Up works; rollback and Down **not tested yet** |
-| Deployed on GCP | App released; public site waiting on its certificate |
-| Load test numbers | None yet |
+| GitHub Actions pipelines | Up and gradual release work; rollback and Down **not tested yet** |
+| Deployed on GCP | **Yes, live** |
+| Load test | Done, see `docs/load-test.md` |
 
 Only claim what's done. If this table says "not started", don't talk about it as finished.
 
@@ -352,3 +352,23 @@ Everything risky comes after the cheap checks, so a failed test or scan costs no
 - *Why not put the admin flag in the JWT?* It's quicker, but a removed admin would keep their rights until the token expires, up to 12 hours.
 - *Why lock all the admin rows, not just one?* The two requests touch different rows, so locking only the target wouldn't make them wait for each other.
 - *Why can't an admin remove themselves?* It blocks the simplest way to end up with no admins. Another admin can do it instead.
+
+---
+
+## 14. Load test
+
+**What changed:** ran a stepped load test on the live site with k6, and saved the results in `docs/load-test.md`.
+
+**How:** six one-minute steps from 10 to 400 requests a second, using 70% event list, 20% seat map, and 10% booking requests. It used a temporary event and throwaway accounts.
+
+**Result:** 100 requests a second with no failures and a 181 ms 95th percentile. At 200, 3.2% failed. At 400, 73.5% failed.
+
+**The important finding:** the limit was the Cloud Run instance cap, not the database. Failures were `429` responses. The database peaked at about 50% CPU and 18 connections, and 1,732 bookings matched 1,732 booked seats exactly. The connection budget from entry 8 did its job.
+
+**Likely questions:**
+- *What's your app's capacity?* About 100 requests a second on this setup, measured for 60 seconds. It's a measured number for a specific traffic mix, not a guarantee.
+- *Why did response times hit 10 seconds at 200?* Requests queued waiting for a free instance, and some gave up and got a `429`.
+- *How would you go higher?* Use a larger database first, because it sets the connection budget. Then raise the instance limit. Connection pooling, such as PgBouncer, would help too.
+- *Isn't failing 73% of requests bad?* At twice the safe load, refusing requests quickly is better than letting the database fall over and losing bookings. It's called load shedding.
+- *How do you know nothing was double-booked?* The counts matched exactly, and the database enforces it with a unique index.
+- *What wasn't tested?* Long-running load, login, and traffic beyond what one laptop can send.
