@@ -440,3 +440,84 @@ def test_sign_ups_close_at_the_user_limit(monkeypatch):
         json={"email": f"{uuid.uuid4().hex}@example.com", "password": PASSWORD},
     )
     assert res.status_code == 403
+
+
+def user_id(client):
+    return client.get("/auth/me").json()["id"]
+
+
+def only_these_admins(*clients):
+    ids = [user_id(client) for client in clients]
+    with pool.connection() as conn:
+        conn.execute("UPDATE users SET is_admin = (id = ANY(%s))", (ids,))
+
+
+def test_user_list_is_for_admins_only(user, admin):
+    assert anonymous().get("/admin/users").status_code == 401
+    assert user.get("/admin/users").status_code == 403
+    target = user_id(user)
+    assert anonymous().post(f"/admin/users/{target}/grant").status_code == 401
+    assert user.post(f"/admin/users/{target}/grant").status_code == 403
+    assert user.post(f"/admin/users/{user_id(admin)}/revoke").status_code == 403
+
+
+def test_user_list_shows_no_password_data_and_is_ordered(user, admin):
+    res = admin.get("/admin/users")
+    assert res.status_code == 200
+    users = res.json()
+    assert "password_hash" not in res.text
+    assert set(users[0]) == {"id", "email", "is_admin", "created_at"}
+    ids = [u["id"] for u in users]
+    assert ids == sorted(ids)
+    assert user.email in [u["email"] for u in users]
+
+
+def test_grant_gives_admin_rights_and_repeat_is_harmless(user, admin):
+    target = user_id(user)
+    assert user.get("/admin/users").status_code == 403
+    assert admin.post(f"/admin/users/{target}/grant").json()["is_admin"] is True
+    assert admin.post(f"/admin/users/{target}/grant").status_code == 200
+    assert user.get("/admin/users").status_code == 200
+
+
+def test_revoke_works_on_the_next_request_and_repeat_is_harmless(user, admin):
+    target = user_id(user)
+    admin.post(f"/admin/users/{target}/grant")
+    assert user.get("/admin/users").status_code == 200
+    assert admin.post(f"/admin/users/{target}/revoke").json()["is_admin"] is False
+    assert user.get("/admin/users").status_code == 403
+    assert admin.post(f"/admin/users/{target}/revoke").status_code == 200
+
+
+def test_admin_cannot_revoke_themselves(admin):
+    assert admin.post(f"/admin/users/{user_id(admin)}/revoke").status_code == 409
+    assert admin.get("/admin/users").status_code == 200
+
+
+def test_last_admin_cannot_be_removed(admin):
+    only_these_admins(admin)
+    assert admin.post(f"/admin/users/{user_id(admin)}/revoke").status_code == 409
+    assert admin.get("/admin/users").status_code == 200
+
+
+def test_two_admins_revoking_each_other_leaves_one(user, admin):
+    for _ in range(10):
+        admin.post(f"/admin/users/{user_id(user)}/grant")
+        only_these_admins(user, admin)
+        pairs = [(admin, user_id(user)), (user, user_id(admin))]
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            results = list(
+                executor.map(lambda p: p[0].post(f"/admin/users/{p[1]}/revoke").status_code, pairs)
+            )
+        assert sorted(results) == [200, 403]
+        with pool.connection() as conn:
+            total = conn.execute(
+                "SELECT count(*) AS total FROM users WHERE is_admin"
+            ).fetchone()["total"]
+        assert total == 1
+        only_these_admins(admin)
+
+
+def test_unknown_user_is_not_found(admin):
+    assert admin.post("/admin/users/999999999/grant").status_code == 404
+    assert admin.post("/admin/users/999999999/revoke").status_code == 404

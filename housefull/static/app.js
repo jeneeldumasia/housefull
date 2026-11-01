@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const views = ["view-events", "view-seats", "view-bookings"];
+const views = ["view-events", "view-seats", "view-bookings", "view-users"];
 const BOOKING_LABELS = { pending: "Confirming", confirmed: "Confirmed", expired: "Expired", cancelled: "Cancelled" };
 const MAX_SEATS = 6;
 const money = (amount) => `₹${amount.toLocaleString("en-IN")}`;
@@ -47,6 +47,7 @@ function renderNav() {
   const user = state.user;
   $("nav-email").textContent = user ? user.email : "";
   $("nav-bookings").hidden = !user;
+  $("nav-users").hidden = !(user && user.is_admin);
   $("nav-logout").hidden = !user;
   $("nav-login").hidden = Boolean(user);
   $("event-form").hidden = !(user && user.is_admin);
@@ -185,6 +186,39 @@ async function cancelBooking(booking) {
   await loadBookings();
 }
 
+async function loadUsers() {
+  show("view-users");
+  const list = $("user-list");
+  const users = await api("/admin/users");
+  list.replaceChildren();
+  users.forEach((user) => {
+    const card = el("div", "card");
+    const isSelf = user.id === state.user.id;
+    card.append(
+      el("strong", "", user.email),
+      el("small", "", `Joined ${when(user.created_at)}`),
+      el("span", "tag", isSelf ? "Admin (you)" : user.is_admin ? "Admin" : "User"),
+    );
+    if (!isSelf) {
+      const action = el("button", "link card-actions", user.is_admin ? "Revoke admin" : "Grant admin");
+      action.addEventListener("click", () => changeAdmin(user));
+      card.append(action);
+    }
+    list.append(card);
+  });
+}
+
+async function changeAdmin(user) {
+  if (user.is_admin && !window.confirm(`Remove admin rights from ${user.email}?`)) return;
+  try {
+    await api(`/admin/users/${user.id}/${user.is_admin ? "revoke" : "grant"}`, { method: "POST" });
+    toast(user.is_admin ? "Admin rights removed." : "Admin rights granted.");
+    await loadUsers();
+  } catch (error) {
+    toast(error.message);
+  }
+}
+
 function renderAuthMode() {
   $("auth-title").textContent = state.register ? "Create your account" : "Log in";
   $("auth-submit").textContent = state.register ? "Create account" : "Log in";
@@ -232,6 +266,7 @@ $("search").addEventListener("input", () => {
 });
 $("nav-login").addEventListener("click", () => openAuth());
 $("nav-bookings").addEventListener("click", loadBookings);
+$("nav-users").addEventListener("click", loadUsers);
 $("book-button").addEventListener("click", book);
 $("home").addEventListener("click", (event) => {
   event.preventDefault();

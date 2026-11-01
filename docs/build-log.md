@@ -327,3 +327,28 @@ Everything risky comes after the cheap checks, so a failed test or scan costs no
 - *How would you know if the site went down?* A Cloud Monitoring uptime check calls `/health` from several locations and emails an alert.
 - *Why alert on the dead-letter queue?* A message only lands there after 5 failed attempts, so one message means a customer's booking wasn't confirmed.
 - *Are the backups tested?* No. A backup you've never restored is only a hope, and a real service would test restores.
+
+---
+
+## 13. Admin user management
+
+**What changed:** admins now have a Users page listing every account, with buttons to grant or remove admin rights. It's backed by `GET /admin/users` and `POST /admin/users/{id}/grant` or `/revoke`. Tested locally and in a real browser. **Not on the live site until this is merged and deployed.**
+
+**Why:** the Grant admin workflow can add an admin, but it can't remove one, and it needs GitHub access. Everyday account management belongs in the app. The workflow stays for the first admin, because the page needs an admin to open it.
+
+**How it works:**
+- Only admins can reach these routes. Everyone else gets 401 or 403.
+- The list returns only id, email, admin status, and join date. It never returns password hashes.
+- A revoke takes effect on the person's next request, because `current_user` reads `is_admin` from the database every time. It isn't stored in their login token.
+- Repeating a grant or revoke changes nothing and returns success.
+
+**Keeping at least one admin:** an admin can't remove their own rights, so whoever revokes someone always remains an admin. Two admins revoking each other at the same moment could still remove both, so a revoke locks all admin rows first. The second request then waits, sees it's no longer an admin, and gets 403. A test repeats this race, and exactly one admin is left each time.
+
+**Known limits:**
+- Admins can't delete accounts or reset passwords.
+- There's no audit log of who changed what.
+
+**Likely questions:**
+- *Why not put the admin flag in the JWT?* It's quicker, but a removed admin would keep their rights until the token expires, up to 12 hours.
+- *Why lock all the admin rows, not just one?* The two requests touch different rows, so locking only the target wouldn't make them wait for each other.
+- *Why can't an admin remove themselves?* It blocks the simplest way to end up with no admins. Another admin can do it instead.
