@@ -372,3 +372,25 @@ Everything risky comes after the cheap checks, so a failed test or scan costs no
 - *Isn't failing 73% of requests bad?* At twice the safe load, refusing requests quickly is better than letting the database fall over and losing bookings. It's called load shedding.
 - *How do you know nothing was double-booked?* The counts matched exactly, and the database enforces it with a unique index.
 - *What wasn't tested?* Long-running load, login, and traffic beyond what one laptop can send.
+
+---
+
+## 15. UI redesign
+
+**What changed:** the site now looks like a theatre: a marquee hero with bulb lights over a red curtain, ticket-shaped event cards, a seat map with rows and an aisle, an order panel, tickets with references, and a redesigned admin page.
+
+**What improved beyond looks:**
+- **Links work.** Each page has its own address, like `#/events/2`, so the back button, refresh, and sharing a link all work. This is called hash routing.
+- **Phones get their own layout.** The order panel becomes a fixed bar at the bottom of the screen.
+- **Better states.** There are loading placeholders, friendly empty pages, retry buttons, and a clear message when the site is busy (`429`).
+- **Accessibility.** It works with a keyboard, screen reader labels are included, and animation stops for people who ask for reduced motion.
+- **Honest labels.** The footer says it's a portfolio project and no real tickets are sold.
+
+**Still simple on purpose:** there's no framework or build step. It's plain HTML, CSS, and JavaScript served by the API, so it adds nothing to deploy.
+
+**Bug found by looking, not testing:** automated tests passed while the date stub on event cards was the wrong height, because a `button` doesn't stretch its contents. Screenshots caught it. Cards are now real links, which also lets people open them in a new tab.
+
+**Likely questions:**
+- *Why no React?* The UI is small, and a framework would add a build step and more to maintain. The project is about delivery, so I kept the frontend simple.
+- *How is user input kept safe?* Text is inserted with `textContent`, so an event name can't run as code.
+- *Why did you redesign it if this is a DevOps project?* Recruiters open the live link first, and a working, polished site makes them read further.
