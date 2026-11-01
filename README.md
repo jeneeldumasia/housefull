@@ -32,21 +32,9 @@ Load tested on the live site, on small Cloud Run instances and the smallest Clou
 
 ## Architecture
 
-```mermaid
-flowchart TD
-    U[Users] -->|HTTPS| LB[Global load balancer]
-    LB --> API[Cloud Run: API and UI]
-    API --> DB[(Cloud SQL PostgreSQL<br/>private IP)]
-    API -->|publish| PS[Pub/Sub: bookings]
-    PS -->|signed push| W[Cloud Run: worker]
-    W --> DB
-    PS -->|after 5 failed tries| DL[Dead-letter topic]
-    S[Cloud Scheduler] --> J[Cloud Run job: expire seat holds]
-    J --> DB
-    A[Admin device] -->|WireGuard and TOTP| V[VM: Wag VPN]
-    V --> G[Grafana, private]
-    G --> M[Cloud Monitoring]
-```
+![Housefull architecture on Google Cloud](docs/diagrams/architecture.png)
+
+The source is [`docs/diagrams/architecture.drawio`](docs/diagrams/architecture.drawio), which opens in [draw.io](https://app.diagrams.net).
 
 How a booking works:
 

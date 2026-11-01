@@ -436,3 +436,12 @@ Everything risky comes after the cheap checks, so a failed test or scan costs no
 - *What's a better option at company scale?* An identity-aware proxy with single sign-on, like Cloudflare Access or Google IAP, so there's no VPN to run.
 - *Why did you ship with a critical CVE?* It was a documented decision. There's no fixed version, the affected service isn't exposed, and it's recorded so it gets revisited.
 - *What's IAP?* A Google service that checks your identity before forwarding traffic to a private VM, so port 22 needs no public access.
+
+---
+
+## 17. Architecture diagram
+
+**What changed:** the README diagram is now a draw.io diagram with Google Cloud's icons. The source is `docs/diagrams/architecture.drawio`, and `architecture.png` is exported from it. Update both together.
+
+**Likely question:**
+- *Walk me through this diagram.* Start with a user's booking, left to right, then explain the private VPC, and finish with how GitHub Actions and the VPN reach it. Practise this out loud, because it's a common interview opener.
