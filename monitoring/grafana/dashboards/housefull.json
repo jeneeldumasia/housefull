@@ -1,0 +1,588 @@
+{
+  "uid": "housefull",
+  "title": "Housefull",
+  "description": "Live metrics from the Housefull booking platform.",
+  "tags": [
+    "housefull"
+  ],
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Requests per second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "housefull-monitoring"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "housefull-monitoring"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "{{metric.label.response_code_class}}",
+          "timeSeriesList": {
+            "projectName": "__PROJECT__",
+            "filters": [
+              "metric.type",
+              "=",
+              "run.googleapis.com/request_count",
+              "AND",
+              "resource.type",
+              "=",
+              "cloud_run_revision",
+              "AND",
+              "resource.label.service_name",
+              "=",
+              "housefull-api"
+            ],
+            "groupBys": [
+              "metric.label.response_code_class"
+            ],
+            "crossSeriesReducer": "REDUCE_SUM",
+            "perSeriesAligner": "ALIGN_RATE",
+            "alignmentPeriod": "+60s",
+            "view": "FULL"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 2,
+      "title": "API response time",
+      "type": "timeseries",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "housefull-monitoring"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "housefull-monitoring"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "Median",
+          "timeSeriesList": {
+            "projectName": "__PROJECT__",
+            "filters": [
+              "metric.type",
+              "=",
+              "run.googleapis.com/request_latencies",
+              "AND",
+              "resource.type",
+              "=",
+              "cloud_run_revision",
+              "AND",
+              "resource.label.service_name",
+              "=",
+              "housefull-api"
+            ],
+            "groupBys": [],
+            "crossSeriesReducer": "REDUCE_MEAN",
+            "perSeriesAligner": "ALIGN_PERCENTILE_50",
+            "alignmentPeriod": "+60s",
+            "view": "FULL"
+          }
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "housefull-monitoring"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "95th percentile",
+          "timeSeriesList": {
+            "projectName": "__PROJECT__",
+            "filters": [
+              "metric.type",
+              "=",
+              "run.googleapis.com/request_latencies",
+              "AND",
+              "resource.type",
+              "=",
+              "cloud_run_revision",
+              "AND",
+              "resource.label.service_name",
+              "=",
+              "housefull-api"
+            ],
+            "groupBys": [],
+            "crossSeriesReducer": "REDUCE_MEAN",
+            "perSeriesAligner": "ALIGN_PERCENTILE_95",
+            "alignmentPeriod": "+60s",
+            "view": "FULL"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 3,
+      "title": "API instances",
+      "type": "timeseries",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "housefull-monitoring"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "housefull-monitoring"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "{{metric.label.state}}",
+          "timeSeriesList": {
+            "projectName": "__PROJECT__",
+            "filters": [
+              "metric.type",
+              "=",
+              "run.googleapis.com/container/instance_count",
+              "AND",
+              "resource.type",
+              "=",
+              "cloud_run_revision",
+              "AND",
+              "resource.label.service_name",
+              "=",
+              "housefull-api"
+            ],
+            "groupBys": [
+              "metric.label.state"
+            ],
+            "crossSeriesReducer": "REDUCE_SUM",
+            "perSeriesAligner": "ALIGN_MAX",
+            "alignmentPeriod": "+60s",
+            "view": "FULL"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 4,
+      "title": "Worker requests per second",
+      "type": "timeseries",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "housefull-monitoring"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "housefull-monitoring"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "{{metric.label.response_code_class}}",
+          "timeSeriesList": {
+            "projectName": "__PROJECT__",
+            "filters": [
+              "metric.type",
+              "=",
+              "run.googleapis.com/request_count",
+              "AND",
+              "resource.type",
+              "=",
+              "cloud_run_revision",
+              "AND",
+              "resource.label.service_name",
+              "=",
+              "housefull-worker"
+            ],
+            "groupBys": [
+              "metric.label.response_code_class"
+            ],
+            "crossSeriesReducer": "REDUCE_SUM",
+            "perSeriesAligner": "ALIGN_RATE",
+            "alignmentPeriod": "+60s",
+            "view": "FULL"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 8,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 5,
+      "title": "Failed bookings waiting (dead-letter queue)",
+      "type": "timeseries",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "housefull-monitoring"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "housefull-monitoring"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "Messages",
+          "timeSeriesList": {
+            "projectName": "__PROJECT__",
+            "filters": [
+              "metric.type",
+              "=",
+              "pubsub.googleapis.com/subscription/num_undelivered_messages",
+              "AND",
+              "resource.type",
+              "=",
+              "pubsub_subscription",
+              "AND",
+              "resource.label.subscription_id",
+              "=",
+              "bookings-dead-letter"
+            ],
+            "groupBys": [],
+            "crossSeriesReducer": "REDUCE_NONE",
+            "perSeriesAligner": "ALIGN_MAX",
+            "alignmentPeriod": "+60s",
+            "view": "FULL"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 16,
+        "y": 8,
+        "w": 8,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "title": "Database CPU",
+      "type": "timeseries",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "housefull-monitoring"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "housefull-monitoring"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "CPU",
+          "timeSeriesList": {
+            "projectName": "__PROJECT__",
+            "filters": [
+              "metric.type",
+              "=",
+              "cloudsql.googleapis.com/database/cpu/utilization",
+              "AND",
+              "resource.type",
+              "=",
+              "cloudsql_database"
+            ],
+            "groupBys": [],
+            "crossSeriesReducer": "REDUCE_MAX",
+            "perSeriesAligner": "ALIGN_MAX",
+            "alignmentPeriod": "+60s",
+            "view": "FULL"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 0,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percentunit",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "title": "Database connections",
+      "type": "timeseries",
+      "datasource": {
+        "type": "stackdriver",
+        "uid": "housefull-monitoring"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "stackdriver",
+            "uid": "housefull-monitoring"
+          },
+          "queryType": "timeSeriesList",
+          "aliasBy": "Connections",
+          "timeSeriesList": {
+            "projectName": "__PROJECT__",
+            "filters": [
+              "metric.type",
+              "=",
+              "cloudsql.googleapis.com/database/postgresql/num_backends",
+              "AND",
+              "resource.type",
+              "=",
+              "cloudsql_database"
+            ],
+            "groupBys": [],
+            "crossSeriesReducer": "REDUCE_SUM",
+            "perSeriesAligner": "ALIGN_MAX",
+            "alignmentPeriod": "+60s",
+            "view": "FULL"
+          }
+        }
+      ],
+      "gridPos": {
+        "x": 12,
+        "y": 16,
+        "w": 12,
+        "h": 8
+      },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "showPoints": "never",
+            "spanNulls": true,
+            "thresholdsStyle": {
+              "mode": "line"
+            }
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 20
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "annotations": {
+    "list": []
+  },
+  "links": [
+    {
+      "title": "Housefull",
+      "type": "link",
+      "url": "https://housefull.jeneeldumasia.dev",
+      "targetBlank": true
+    },
+    {
+      "title": "Load test results",
+      "type": "link",
+      "url": "https://github.com/jeneeldumasia/housefull/blob/main/docs/load-test.md",
+      "targetBlank": true
+    }
+  ]
+}
